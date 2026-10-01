@@ -1,38 +1,21 @@
-# PI — 5º semestre
+# Projeto Integrador — 5º Semestre
 
-Projeto Integrador organizado a partir da reunião de planejamento de 22/08/2026.
+Este projeto consiste no desenvolvimento de um aplicativo móvel como parte do Projeto Integrador do 5º semestre. A solução será construída em React Native com Expo e utilizará SQLite e MySQL, conforme os requisitos definidos para o trabalho.
+
+## Escopo inicial
+
+O planejamento prevê a definição da arquitetura do aplicativo e a avaliação de duas funcionalidades: leitura de código de barras e acompanhamento da localização de entregadores em tempo próximo do real. A implementação dessas funcionalidades dependerá dos resultados das análises de viabilidade e do detalhamento do projeto.
+
+O trabalho será desenvolvido em equipe, com divisão das atividades, testes das implementações e documentação das decisões e resultados.
 
 ## Tecnologias previstas
 
-- React Native com Expo
-- SQLite
-- MySQL
-
-A arquitetura inicial terá como referência o conteúdo apresentado nas aulas. A estrutura do aplicativo e os comandos de execução serão documentados após essa definição.
+- React Native e Expo para o aplicativo móvel.
+- SQLite e MySQL para os requisitos de banco de dados.
+- Procedures, Views e CASE entre os recursos de banco previstos no projeto.
 
 ## Planejamento
 
-Quadro do projeto: https://trello.com/b/HPwgXkhV/pi-5-sem
+As atividades e responsabilidades estão organizadas no [quadro do Trello](https://trello.com/b/HPwgXkhV/pi-5-sem).
 
-Prioridades iniciais:
-
-1. Definir a arquitetura inicial — Yuri.
-2. Investigar a viabilidade da leitura de código de barras — Yuri.
-3. Investigar a localização do entregador em tempo próximo do real — Lucas.
-
-## Responsabilidades
-
-| Integrante | Responsabilidades iniciais |
-| --- | --- |
-| Yuri | Arquitetura, código de barras, paleta, repositório e Trello |
-| William (Will) | Decomposição das etapas, distribuição das atividades e VM |
-| Lucas | Banco de dados, Procedures, Views, CASE e viabilidade de localização |
-| Ricardo | Documentação das decisões, desenvolvimento e resultados |
-
-## Desenvolvimento
-
-Card/Tarefa → Responsável → Desenvolvimento na VM → Testes → Correções → Commit.
-
-Cada integrante deverá realizar os commits das próprias atividades utilizando sua conta Git. Todos devem possuir participação efetiva no repositório.
-
-Consulte [CONTRIBUTING.md](CONTRIBUTING.md) para as orientações de contribuição e [docs/README.md](docs/README.md) para a documentação.
+O projeto está em fase inicial de planejamento.
