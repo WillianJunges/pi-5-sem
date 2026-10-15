@@ -5,6 +5,7 @@ import { CartProvider } from '../../../src/contexts/CartContext';
  * Navegação do perfil Cliente (Willian).
  *   (tabs)/      → abas principais: Cardápio, Carrinho, Pedidos e Conta
  *   addresses    → endereços do cliente
+ *   address-form → cadastro/edição de endereço (?id= para editar)
  *   checkout     → finalizar pedido
  *   order/[id]   → acompanhamento de um pedido
  *
@@ -16,6 +17,7 @@ export default function CustomerLayout() {
       <Stack screenOptions={{ headerBackTitle: 'Voltar' }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="addresses" options={{ title: 'Meus endereços' }} />
+        <Stack.Screen name="address-form" options={{ title: 'Novo endereço' }} />
         <Stack.Screen name="checkout" options={{ title: 'Finalizar pedido' }} />
         <Stack.Screen name="order/[id]" options={{ title: 'Acompanhar pedido' }} />
       </Stack>
