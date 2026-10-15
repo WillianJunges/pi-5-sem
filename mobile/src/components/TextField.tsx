@@ -1,15 +1,18 @@
+import type { Ref } from 'react';
 import { StyleSheet, Text, TextInput, type TextInputProps, View } from 'react-native';
 import { colors, spacing } from '../theme';
 
 interface TextFieldProps extends TextInputProps {
   label: string;
+  /** Permite focar o campo pelo código (ex.: pular para o próximo campo). */
+  ref?: Ref<TextInput>;
 }
 
-export function TextField({ label, style, ...props }: TextFieldProps) {
+export function TextField({ label, style, ref, ...props }: TextFieldProps) {
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
-      <TextInput placeholderTextColor={colors.muted} style={[styles.input, style]} {...props} />
+      <TextInput ref={ref} placeholderTextColor={colors.muted} style={[styles.input, style]} {...props} />
     </View>
   );
 }
