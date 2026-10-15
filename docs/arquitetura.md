@@ -32,6 +32,28 @@ Regra: o *controller* não acessa o banco e o *repository* não tem regra de neg
 
 ```
 mobile/
-├── app/        # telas (Expo Router: cada arquivo é uma rota)
-└── src/        # código que não é tela (serviços, contextos, componentes)
+├── app/                      # telas (Expo Router: cada arquivo é uma rota)
+│   ├── _layout.tsx           # AuthProvider + separa área logada / não logada
+│   ├── (auth)/               # login e cadastro (só sem sessão)
+│   └── (app)/                # só com sessão
+│       ├── index.tsx         # redireciona para a área do perfil
+│       ├── profile.tsx       # perfil do usuário + sair
+│       ├── customer/         # Cliente       → Willian
+│       ├── owner/            # Proprietária  → Lucas
+│       └── courier/          # Motoboy       → Yuri
+└── src/
+    ├── components/           # componentes reutilizáveis (Button, TextField...)
+    ├── contexts/             # AuthContext (useAuth)
+    ├── services/             # api(), autenticação, chamadas ao backend
+    ├── utils/
+    └── theme.ts              # cores e espaçamentos
+```
+
+Cada perfil só consegue abrir a própria pasta (`Stack.Protected` em `app/(app)/_layout.tsx`).
+Cada integrante trabalha dentro da pasta do seu perfil, o que evita conflitos de merge.
+
+Hook de autenticação disponível em qualquer tela:
+
+```tsx
+const { user, signOut } = useAuth();   // user.id, user.name, user.role...
 ```
