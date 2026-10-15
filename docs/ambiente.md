@@ -38,6 +38,7 @@ npm run dev               # http://localhost:3333/health  → {"status":"ok","da
 
 ```bash
 cd mobile
+cp .env.example .env      # coloque o IP do computador que roda o backend
 npm install
 npm start                 # escaneie o QR code com o Expo Go
 ```

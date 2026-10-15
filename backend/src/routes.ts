@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { checkDatabaseConnection } from './config/database';
+import { authRoutes } from './modules/auth/auth.routes';
 
 export const routes = Router();
 
@@ -8,5 +9,4 @@ routes.get('/health', async (_req, res) => {
   res.status(database === 'ok' ? 200 : 503).json({ status: 'ok', database });
 });
 
-// Cada módulo registra suas rotas aqui, ex.:
-// routes.use('/auth', authRoutes);
+routes.use('/auth', authRoutes);

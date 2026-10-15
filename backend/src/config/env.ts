@@ -18,4 +18,11 @@ export const env = {
     password: process.env.DB_PASSWORD ?? '',
     database: required('DB_NAME'),
   },
+  auth: {
+    accessTokenSecret: required('JWT_ACCESS_SECRET'),
+    /** Tempo de vida do access token em segundos (padrão: 15 min). */
+    accessTokenTtl: Number(process.env.JWT_ACCESS_TTL_SECONDS ?? 15 * 60),
+    /** Tempo de vida do refresh token em dias (padrão: 30). */
+    refreshTokenTtlDays: Number(process.env.REFRESH_TOKEN_TTL_DAYS ?? 30),
+  },
 };
