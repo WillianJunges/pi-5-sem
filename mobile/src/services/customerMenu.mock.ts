@@ -1,3 +1,4 @@
+import { todayISODate } from '../utils/date';
 import type { Menu } from './customerMenu.service';
 
 /**
@@ -8,16 +9,9 @@ export async function mockTodayMenu(): Promise<Menu> {
   // simula o tempo de resposta da rede para dar para ver o "carregando"
   await new Promise((resolve) => setTimeout(resolve, 600));
 
-  const today = new Date();
-  const date = [
-    today.getFullYear(),
-    String(today.getMonth() + 1).padStart(2, '0'),
-    String(today.getDate()).padStart(2, '0'),
-  ].join('-');
-
   return {
     menuId: 'mock-menu',
-    date,
+    date: todayISODate(),
     status: 'ACTIVE',
     items: [
       {

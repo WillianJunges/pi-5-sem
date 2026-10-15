@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router/js-tabs';
 import { Text } from 'react-native';
+import { useCart } from '../../../../src/contexts/CartContext';
 import { colors } from '../../../../src/theme';
 
 function TabIcon({ icon, focused }: { icon: string; focused: boolean }) {
@@ -8,6 +9,7 @@ function TabIcon({ icon, focused }: { icon: string; focused: boolean }) {
 
 /** Abas principais do Cliente. */
 export default function CustomerTabsLayout() {
+  const { count } = useCart();
   return (
     <Tabs
       screenOptions={{
@@ -27,6 +29,8 @@ export default function CustomerTabsLayout() {
         name="cart"
         options={{
           title: 'Carrinho',
+          tabBarBadge: count > 0 ? count : undefined,
+          tabBarBadgeStyle: { backgroundColor: colors.primary },
           tabBarIcon: ({ focused }) => <TabIcon icon="🛒" focused={focused} />,
         }}
       />
