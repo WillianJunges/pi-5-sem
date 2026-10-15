@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { AddToCartSheet } from '../../../../src/components/AddToCartSheet';
 import { Button } from '../../../../src/components/Button';
 import { EmptyState } from '../../../../src/components/EmptyState';
 import { useAuth } from '../../../../src/contexts/AuthContext';
@@ -13,9 +14,9 @@ import { colors, spacing } from '../../../../src/theme';
 import { getErrorMessage } from '../../../../src/utils/errors';
 import { formatCurrency, formatLongDate } from '../../../../src/utils/format';
 
-function MenuItemCard({ item }: { item: MenuItem }) {
+function MenuItemCard({ item, onPress }: { item: MenuItem; onPress(): void }) {
   return (
-    <View style={styles.card}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && { opacity: 0.7 }]}>
       <View style={styles.cardHeader}>
         <Text style={styles.itemName}>{item.name}</Text>
         <Text style={styles.price}>{formatCurrency(item.price)}</Text>
@@ -30,17 +31,19 @@ function MenuItemCard({ item }: { item: MenuItem }) {
           ))}
         </View>
       ) : null}
-    </View>
+      <Text style={styles.addHint}>Toque para adicionar</Text>
+    </Pressable>
   );
 }
 
-/** Cardápio do dia. Tocar no item para adicionar ao carrinho entra no item 3. */
+/** Cardápio do dia. Tocar num item abre a janela para adicionar ao carrinho. */
 export default function MenuScreen() {
   const { user } = useAuth();
   const [menu, setMenu] = useState<Menu | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<MenuItem | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -86,31 +89,34 @@ export default function MenuScreen() {
   const isOpen = menu?.status === 'ACTIVE' && menu.items.length > 0;
 
   return (
-    <FlatList
-      style={styles.list}
-      contentContainerStyle={styles.listContent}
-      data={isOpen ? menu.items : []}
-      keyExtractor={(item) => item.productId}
-      renderItem={({ item }) => <MenuItemCard item={item} />}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
-      }
-      ListHeaderComponent={
-        <View style={styles.header}>
-          {USE_MENU_MOCK ? <Text style={styles.mockBadge}>Dados de exemplo</Text> : null}
-          <Text style={styles.greeting}>Olá, {user?.name.split(' ')[0]}!</Text>
-          <Text style={styles.title}>Cardápio de hoje</Text>
-          {menu ? <Text style={styles.date}>{formatLongDate(menu.date)}</Text> : null}
-        </View>
-      }
-      ListEmptyComponent={
-        menu?.status === 'CLOSED' ? (
-          <EmptyState icon="🔒" title="Pedidos encerrados" message="O cardápio de hoje já foi fechado. Volte amanhã!" />
-        ) : (
-          <EmptyState icon="🍱" title="Sem cardápio hoje" message="O cardápio ainda não foi publicado. Puxe para atualizar." />
-        )
-      }
-    />
+    <>
+      <FlatList
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
+        data={isOpen ? menu.items : []}
+        keyExtractor={(item) => item.productId}
+        renderItem={({ item }) => <MenuItemCard item={item} onPress={() => setSelected(item)} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
+        }
+        ListHeaderComponent={
+          <View style={styles.header}>
+            {USE_MENU_MOCK ? <Text style={styles.mockBadge}>Dados de exemplo</Text> : null}
+            <Text style={styles.greeting}>Olá, {user?.name.split(' ')[0]}!</Text>
+            <Text style={styles.title}>Cardápio de hoje</Text>
+            {menu ? <Text style={styles.date}>{formatLongDate(menu.date)}</Text> : null}
+          </View>
+        }
+        ListEmptyComponent={
+          menu?.status === 'CLOSED' ? (
+            <EmptyState icon="🔒" title="Pedidos encerrados" message="O cardápio de hoje já foi fechado. Volte amanhã!" />
+          ) : (
+            <EmptyState icon="🍱" title="Sem cardápio hoje" message="O cardápio ainda não foi publicado. Puxe para atualizar." />
+          )
+        }
+      />
+      {menu ? <AddToCartSheet item={selected} menuDate={menu.date} onClose={() => setSelected(null)} /> : null}
+    </>
   );
 }
 
@@ -149,4 +155,5 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 13,
   },
+  addHint: { fontSize: 13, fontWeight: '600', color: colors.primary },
 });
