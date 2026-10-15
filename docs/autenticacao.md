@@ -46,3 +46,43 @@ const pedidos = await api<Pedido[]>('/orders');
 // rota pública
 await api('/menus/today', { auth: false });
 ```
+
+## Perfis e rotas protegidas (backend)
+
+Perfis: `CUSTOMER` (cliente), `OWNER` (proprietária) e `COURIER` (motoboy).
+
+Dois middlewares em `backend/src/shared/middlewares/`:
+
+- `authenticate` — exige token válido e preenche `req.user = { id, role }`. Sem token ou
+  token inválido/expirado → **401**.
+- `authorize(...perfis)` — libera só para os perfis informados. Outro perfil → **403**.
+
+```ts
+import { authenticate } from '../../shared/middlewares/authenticate';
+import { authorize } from '../../shared/middlewares/authorize';
+
+// módulo inteiro só da proprietária (em routes.ts)
+routes.use('/owner', authenticate, authorize('OWNER'), ownerRoutes);
+
+// rota específica para mais de um perfil
+router.get('/orders/:id', authenticate, authorize('CUSTOMER', 'OWNER'), ordersController.show);
+
+// dentro do controller
+const userId = req.user!.id;
+```
+
+### Perfil do usuário logado
+
+| Método | Rota | Resposta |
+|---|---|---|
+| GET | `/users/me` | `200 { id, name, email, phone, role, active, createdAt, updatedAt }` |
+
+## Criando usuários de teste (proprietária, motoboy)
+
+O cadastro pelo app só cria clientes. Para os outros perfis:
+
+```bash
+cd backend
+npm run user:create -- --name "Dona Maria" --email maria@teste.com --password 123456 --role OWNER
+npm run user:create -- --name "João Motoboy" --email joao@teste.com --password 123456 --role COURIER
+```
