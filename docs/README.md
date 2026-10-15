@@ -7,3 +7,4 @@
 | [autenticacao.md](autenticacao.md) | Login, tokens e endpoints de autenticação |
 | [banco-de-dados.md](banco-de-dados.md) | MySQL: tabelas, view, functions, procedures e triggers |
 | [banco-nao-relacional.md](banco-nao-relacional.md) | MongoDB: desnormalização e coleções |
+| [modulo-proprietaria.md](modulo-proprietaria.md) | Proprietária: produtos, cardápios, taxas e o cardápio do dia (`GET /menus/today`) |
