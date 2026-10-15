@@ -1,21 +1,29 @@
-# Projeto Integrador — 5º Semestre
+# App da Marmitaria
 
-Este projeto consiste no desenvolvimento de um aplicativo móvel como parte do Projeto Integrador do 5º semestre. A solução será construída em React Native com Expo e utilizará SQLite e MySQL, conforme os requisitos definidos para o trabalho.
+Aplicativo de pedidos de marmitas com três perfis de uso:
 
-## Escopo inicial
+- **Cliente** — consulta o cardápio, faz e acompanha pedidos.
+- **Proprietária** — gerencia produtos, cardápios, pedidos e motoboys.
+- **Motoboy** — recebe e realiza as entregas, com rastreamento em tempo real.
 
-O planejamento prevê a definição da arquitetura do aplicativo e a avaliação de duas funcionalidades: leitura de código de barras e acompanhamento da localização de entregadores em tempo próximo do real. A implementação dessas funcionalidades dependerá dos resultados das análises de viabilidade e do detalhamento do projeto.
+## Estrutura do repositório
 
-O trabalho será desenvolvido em equipe, com divisão das atividades, testes das implementações e documentação das decisões e resultados.
+| Pasta | Conteúdo |
+|---|---|
+| `mobile/` | App em React Native (Expo + TypeScript + Expo Router) |
+| `backend/` | API em Node.js (Express + TypeScript) |
+| `database/` | Scripts SQL do banco MySQL |
+| `docs/` | Documentação do projeto |
 
-## Tecnologias previstas
+## Como rodar
 
-- React Native e Expo para o aplicativo móvel.
-- SQLite e MySQL para os requisitos de banco de dados.
-- Procedures, Views e CASE entre os recursos de banco previstos no projeto.
+Veja [docs/ambiente.md](docs/ambiente.md).
 
-## Planejamento
+## Equipe
 
-As atividades e responsabilidades estão organizadas no [quadro do Trello](https://trello.com/b/HPwgXkhV/pi-5-sem).
-
-O projeto está em fase inicial de planejamento.
+| Integrante | Módulo |
+|---|---|
+| Ricardo | Base, autenticação e documentação |
+| Willian | Cliente |
+| Yuri | Motoboy e rastreamento |
+| Lucas | Proprietária |
