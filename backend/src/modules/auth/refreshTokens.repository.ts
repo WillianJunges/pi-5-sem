@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { RowDataPacket } from 'mysql2/promise';
 import { db } from '../../config/database';
+import { translateDatabaseError } from '../../shared/errors/databaseErrors';
 
 export interface RefreshToken {
   id: string;
@@ -13,7 +14,11 @@ export interface RefreshTokensRepository {
   create(userId: string, tokenHash: string, expiresAt: Date): Promise<void>;
   findByHash(tokenHash: string): Promise<RefreshToken | null>;
   revoke(id: string): Promise<void>;
-  revokeAllFromUser(userId: string): Promise<void>;
+  /**
+   * Troca o token antigo por um novo de forma atômica e devolve o id do usuário.
+   * Lança AppError 401 se o token for inválido, expirado ou já usado.
+   */
+  rotate(oldHash: string, newHash: string, expiresAt: Date): Promise<string>;
 }
 
 interface RefreshTokenRow extends RowDataPacket {
@@ -45,10 +50,19 @@ export class MySqlRefreshTokensRepository implements RefreshTokensRepository {
     await db.query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE id = ? AND revoked_at IS NULL', [id]);
   }
 
-  async revokeAllFromUser(userId: string): Promise<void> {
-    await db.query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = ? AND revoked_at IS NULL', [
-      userId,
-    ]);
+  /** Usa a procedure sp_rotate_refresh_token (transação com bloqueio da linha). */
+  async rotate(oldHash: string, newHash: string, expiresAt: Date): Promise<string> {
+    try {
+      const [result] = await db.query<RowDataPacket[][]>('CALL sp_rotate_refresh_token(?, ?, ?, ?)', [
+        oldHash,
+        randomUUID(),
+        newHash,
+        expiresAt,
+      ]);
+      return result[0][0].user_id as string;
+    } catch (err) {
+      throw translateDatabaseError(err);
+    }
   }
 }
 

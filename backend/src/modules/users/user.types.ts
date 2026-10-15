@@ -21,6 +21,12 @@ export function toPublicUser(user: User): PublicUser {
   return publicUser;
 }
 
+/** Linha da view vw_users (listagem). */
+export interface UserSummary extends PublicUser {
+  roleLabel: string;
+  activeSessions: number;
+}
+
 export interface CreateUserData {
   name: string;
   email: string;

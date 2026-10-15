@@ -12,8 +12,13 @@ Aplicativo de pedidos de marmitas com três perfis de uso:
 |---|---|
 | `mobile/` | App em React Native (Expo + TypeScript + Expo Router) |
 | `backend/` | API em Node.js (Express + TypeScript) |
-| `database/` | Scripts SQL do banco MySQL |
+| `database/` | Scripts SQL do MySQL (tabelas, views, functions, procedures, triggers) |
 | `docs/` | Documentação do projeto |
+
+## Bancos de dados
+
+- **MySQL** — base relacional principal ([docs/banco-de-dados.md](docs/banco-de-dados.md))
+- **MongoDB** — dados desnormalizados ([docs/banco-nao-relacional.md](docs/banco-nao-relacional.md))
 
 ## Como rodar
 

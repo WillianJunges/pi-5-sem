@@ -1,0 +1,84 @@
+# Banco de dados relacional (MySQL)
+
+Requisitos da disciplina de Laboratório de Banco de Dados atendidos pelo módulo base:
+**view, function, procedure e trigger**, com consistências, transação e tratamento de erros.
+Os scripts ficam em `database/schema/` e são aplicados com `npm run db:migrate`.
+
+## Tabelas
+
+| Tabela | Script | Descrição |
+|---|---|---|
+| `users` | 001 | Usuários de todos os perfis (CUSTOMER, OWNER, COURIER) |
+| `refresh_tokens` | 002 | Sessões do app (hash do refresh token) |
+| `user_audit` | 003 | Histórico de mudanças em usuários |
+| `schema_migrations` | — | Controle de quais scripts já rodaram (criada pelo `db:migrate`) |
+
+## Objetos programáveis
+
+| Tipo | Nome | Script | O que faz | Onde é usado |
+|---|---|---|---|---|
+| Trigger | `trg_users_before_insert` | 004 | Padroniza e-mail (minúsculo, sem espaços) e nome | Todo INSERT em `users` |
+| Trigger | `trg_users_before_update` | 004 | Mesma padronização no UPDATE | Todo UPDATE em `users` |
+| Trigger | `trg_users_after_update` | 004 | Audita mudanças de perfil/e-mail/status; ao **desativar** usuário revoga todas as sessões | Desativação de motoboy (módulo da proprietária) |
+| Function | `fn_role_label(role)` | 005 | Nome do perfil em português | `vw_users` |
+| Function | `fn_active_sessions(user_id)` | 005 | Conta sessões válidas do usuário | `vw_users` |
+| View | `vw_users` | 006 | Usuários sem a senha + nome do perfil + sessões ativas | `GET /users` (proprietária) |
+| Procedure | `sp_create_user(...)` | 007 | Valida dados e cria usuário + auditoria em **transação** | Cadastro (`POST /auth/register`) e `npm run user:create` |
+| Procedure | `sp_rotate_refresh_token(...)` | 008 | Renova a sessão de forma **atômica** (`SELECT ... FOR UPDATE`) | `POST /auth/refresh` |
+
+## Transações e tratamento de erros
+
+As procedures seguem o mesmo padrão:
+
+```sql
+DECLARE EXIT HANDLER FOR SQLEXCEPTION
+BEGIN
+  ROLLBACK;   -- desfaz tudo que foi feito na transação
+  RESIGNAL;   -- devolve o erro original para quem chamou
+END;
+
+-- validações → SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '...';
+START TRANSACTION;
+  ...
+COMMIT;
+```
+
+O backend converte os erros do banco em respostas HTTP
+(`backend/src/shared/errors/databaseErrors.ts`):
+
+| Erro no banco | HTTP | Exemplo |
+|---|---|---|
+| `SIGNAL SQLSTATE '45000'` (errno 1644) | 400 | "E-mail inválido" |
+| errno 1062 (duplicidade) | 409 | "E-mail já cadastrado" |
+| `MYSQL_ERRNO = 5401` | 401 | "Sessão inválida" |
+
+## Como cada módulo deve seguir
+
+Cada integrante cria os objetos do seu módulo como novos scripts numerados, por exemplo:
+
+- **Cliente**: `sp_create_order` (cria Order + OrderItems e calcula total em transação),
+  `fn_order_total(order_id)`, `vw_customer_orders`.
+- **Proprietária**: `sp_change_order_status` (valida transição de status),
+  `trg_orders_after_update` (histórico de status), `vw_daily_sales`.
+- **Motoboy**: `sp_finish_delivery` (com proteção contra finalização duplicada),
+  `vw_courier_deliveries`.
+
+Funções e triggers em scripts precisam de `DELIMITER $$ ... DELIMITER ;` (como no
+Workbench). O `db:migrate` entende essa diretiva.
+
+## Configuração necessária
+
+Com o log binário ligado (padrão do MySQL 8), o usuário da aplicação só consegue criar
+triggers e functions com `log_bin_trust_function_creators = 1`. O `docker-compose.yml` e o
+`database/setup-local.sql` já fazem isso.
+
+## Testando no Workbench
+
+```sql
+CALL sp_create_user(UUID(), 'Teste', 'teste@x.com', NULL, 'hash', 'CUSTOMER');
+CALL sp_create_user(UUID(), 'Teste', 'teste@x.com', NULL, 'hash', 'CUSTOMER'); -- erro: duplicado
+CALL sp_create_user(UUID(), 'A', 'x@x.com', NULL, 'hash', 'CUSTOMER');         -- erro: nome
+SELECT * FROM vw_users;
+UPDATE users SET role = 'COURIER' WHERE email = 'teste@x.com';
+SELECT * FROM user_audit;                                                       -- mudança registrada
+```

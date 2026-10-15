@@ -18,6 +18,8 @@ export const env = {
     password: process.env.DB_PASSWORD ?? '',
     database: required('DB_NAME'),
   },
+  /** Opcional. Ex.: mongodb://localhost:27017/marmitaria */
+  mongoUrl: process.env.MONGO_URL ?? '',
   auth: {
     accessTokenSecret: required('JWT_ACCESS_SECRET'),
     /** Tempo de vida do access token em segundos (padrão: 15 min). */

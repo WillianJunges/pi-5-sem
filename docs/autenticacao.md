@@ -8,6 +8,9 @@
   access token expira. No banco guardamos apenas o hash dele (`refresh_tokens`).
 - A cada refresh o token antigo é invalidado (rotação). Se um refresh token já usado for
   reaproveitado, todas as sessões do usuário são encerradas (proteção contra roubo).
+  Essa troca é feita pela procedure `sp_rotate_refresh_token`, em transação.
+- Cadastro, login (inclusive com falha) e logout ficam registrados no MongoDB
+  (`access_logs`), ver [banco-nao-relacional.md](banco-nao-relacional.md).
 - No app, os dois tokens ficam no **SecureStore** (Keychain/Keystore). O `api()` de
   `mobile/src/services/api.ts` renova a sessão sozinho quando recebe 401.
 
@@ -76,6 +79,8 @@ const userId = req.user!.id;
 | Método | Rota | Resposta |
 |---|---|---|
 | GET | `/users/me` | `200 { id, name, email, phone, role, active, createdAt, updatedAt }` |
+| GET | `/users/me/access-logs` | `200 [{ event, success, user, device, createdAt }]` (últimos 20, MongoDB) |
+| GET | `/users?role=COURIER` | `200 [{ ..., roleLabel, activeSessions }]` — **só OWNER** (view `vw_users`) |
 
 ## Criando usuários de teste (proprietária, motoboy)
 

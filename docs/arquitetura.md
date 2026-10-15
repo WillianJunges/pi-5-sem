@@ -3,8 +3,8 @@
 ## Visão geral
 
 ```
-mobile (Expo / React Native)  ──HTTP/JSON──▶  backend (Node + Express)  ──▶  MySQL
-                              ◀─Socket.IO──   (rastreamento em tempo real)
+mobile (Expo / React Native)  ──HTTP/JSON──▶  backend (Node + Express)  ──▶  MySQL   (relacional)
+                              ◀─Socket.IO──   (rastreamento em tempo real) └─▶  MongoDB (desnormalizado)
 ```
 
 ## Backend — organização por módulos
@@ -14,7 +14,7 @@ backend/src/
 ├── app.ts              # configuração do Express (middlewares, rotas, erros)
 ├── server.ts           # sobe o servidor HTTP
 ├── routes.ts           # junta as rotas de todos os módulos
-├── config/             # variáveis de ambiente, conexão com banco
+├── config/             # variáveis de ambiente, conexões (MySQL e MongoDB)
 ├── shared/             # código usado por todos (erros, middlewares)
 └── modules/
     └── <modulo>/
