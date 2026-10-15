@@ -24,10 +24,15 @@ Para apagar tudo e recriar do zero: `docker compose down -v`.
 
 ```bash
 cd backend
-cp .env.example .env
+cp .env.example .env      # os dados do banco devem bater com o .env da raiz
 npm install
-npm run dev               # http://localhost:3333/health
+npm run db:migrate        # cria/atualiza as tabelas (scripts de database/schema)
+npm run dev               # http://localhost:3333/health  → {"status":"ok","database":"ok"}
 ```
+
+> Já tem MySQL instalado na máquina (sem Docker)? Pode usar ele: rode uma vez, como root,
+> o script `database/setup-local.sql` (cria o banco `marmitaria` e o usuário) e depois
+> o `npm run db:migrate`.
 
 ## 3. Mobile
 
