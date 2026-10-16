@@ -1,22 +1,25 @@
 import { api, ApiError } from './api';
-import { mockTodayMenu } from './customerMenu.mock';
-
-/**
- * TEMPORÁRIO: enquanto as tabelas e a rota de cardápio (módulo da Proprietária) não
- * existem, o app usa dados de exemplo. Quando GET /menus/today estiver pronto, troque
- * para false e apague customerMenu.mock.ts.
- */
-export const USE_MENU_MOCK = true;
 
 export type MenuStatus = 'DRAFT' | 'ACTIVE' | 'CLOSED';
 
-/** Formato combinado em docs/banco-nao-relacional.md (documento "menus"). */
+/** Formato de GET /menus/today (docs/modulo-proprietaria.md). Valores em reais. */
+export interface MenuVariation {
+  variantId: string;
+  name: string;
+  /** Preço que vale hoje (já com o preço especial, se houver). */
+  price: number;
+  /** Preço padrão: se for maior que `price`, a variação está em promoção. */
+  standardPrice: number;
+}
+
 export interface MenuItem {
   productId: string;
   name: string;
   description: string | null;
+  category: string | null;
+  /** Menor preço entre as variações ("a partir de"). */
   price: number;
-  variations: string[];
+  variations: MenuVariation[];
 }
 
 export interface Menu {
@@ -27,11 +30,13 @@ export interface Menu {
   items: MenuItem[];
 }
 
-export const customerMenuService = {
-  /** Cardápio do dia (GET /menus/today). Devolve null se não houver cardápio hoje. */
-  async getToday(): Promise<Menu | null> {
-    if (USE_MENU_MOCK) return mockTodayMenu();
+export function isOnSale(variation: MenuVariation): boolean {
+  return variation.price < variation.standardPrice;
+}
 
+export const customerMenuService = {
+  /** Cardápio do dia (GET /menus/today, rota pública). Devolve null se não houver cardápio hoje. */
+  async getToday(): Promise<Menu | null> {
     try {
       return await api<Menu>('/menus/today', { auth: false });
     } catch (err) {
