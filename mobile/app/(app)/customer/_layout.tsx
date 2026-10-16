@@ -19,7 +19,7 @@ export default function CustomerLayout() {
         <Stack.Screen name="addresses" options={{ title: 'Meus endereços' }} />
         <Stack.Screen name="address-form" options={{ title: 'Novo endereço' }} />
         <Stack.Screen name="checkout" options={{ title: 'Finalizar pedido' }} />
-        <Stack.Screen name="order/[id]" options={{ title: 'Acompanhar pedido' }} />
+        <Stack.Screen name="order/[id]" options={{ title: 'Pedido' }} />
       </Stack>
     </CartProvider>
   );
