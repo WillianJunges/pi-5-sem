@@ -4,6 +4,7 @@ import { AppError } from '../../shared/errors/AppError';
  * Serviços de endereço/mapa (gratuitos, sem chave):
  *   ViaCEP  → CEP para rua, bairro, cidade e UF
  *   Photon  → busca por texto (autocomplete) e coordenadas, com dados do OpenStreetMap
+ *   OSRM    → distância por vias (pelas ruas), usada na taxa de entrega (escopo, seção 19)
  *
  * O app chama sempre o nosso backend, nunca os serviços direto: assim dá para trocar de
  * fornecedor sem atualizar o app, e as coordenadas usadas na taxa de entrega são
@@ -14,6 +15,17 @@ const USER_AGENT = 'marmitaria-tg/1.0 (projeto academico)';
 const TIMEOUT_MS = 5000;
 /** Retângulo que cobre o Brasil (oeste, sul, leste, norte). */
 const BRAZIL_BBOX = '-74,-34,-34,5.3';
+/** Servidor público de demonstração do OSRM (grátis, sem chave, ~1 requisição/s). */
+const OSRM_URL = process.env.OSRM_URL ?? 'https://router.project-osrm.org';
+
+/**
+ * De onde saem as entregas. Padrão: Fatec Indaiatuba (projeto integrador).
+ * Para uma marmitaria de verdade, troque STORE_LATITUDE/STORE_LONGITUDE no .env.
+ */
+export const STORE_LOCATION: Coordinates = {
+  latitude: Number(process.env.STORE_LATITUDE ?? -23.085755),
+  longitude: Number(process.env.STORE_LONGITUDE ?? -47.202467),
+};
 
 export interface CepResult {
   cep: string;
@@ -158,7 +170,12 @@ export const geoService = {
    */
   async geocode(address: { street: string; number: string; city: string; state: string; cep: string }) {
     try {
-      const features = await photon(`${address.street} ${address.number}, ${address.city} ${address.state}`, 10);
+      const query = `${address.street} ${address.number}, ${address.city} ${address.state}`;
+      // o servidor público do Photon às vezes recusa pedidos seguidos: tenta mais uma vez
+      const features = await photon(query, 10).catch(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        return photon(query, 10);
+      });
       // confere cidade E estado: o OpenStreetMap tem cidades com o mesmo nome em estados diferentes
       const sameCity = features.filter(
         (f) =>
@@ -174,5 +191,23 @@ export const geoService = {
     } catch {
       return null;
     }
+  },
+
+  /**
+   * Distância por vias (de carro/moto), em metros, de `from` até `to`.
+   * O escopo pede distância pelas ruas, não em linha reta (seção 19).
+   * Também deve servir ao rastreamento do motoboy (módulo do Yuri).
+   */
+  async drivingDistanceMeters(from: Coordinates, to: Coordinates): Promise<number> {
+    // o OSRM recebe longitude,latitude (nessa ordem)
+    const path = `${from.longitude},${from.latitude};${to.longitude},${to.latitude}`;
+    const data = await getJson<{ code: string; routes?: { distance: number }[] }>(
+      `${OSRM_URL}/route/v1/driving/${path}?overview=false`,
+    );
+    const route = data.routes?.[0];
+    if (data.code !== 'Ok' || !route) {
+      throw new AppError('Não encontramos um caminho até esse endereço. Confira o endereço.', 422);
+    }
+    return Math.round(route.distance);
   },
 };

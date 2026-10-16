@@ -5,6 +5,7 @@ import { addressesRoutes } from './modules/addresses/addresses.routes';
 import { authRoutes } from './modules/auth/auth.routes';
 import { geoRoutes } from './modules/geo/geo.routes';
 import { menusRoutes } from './modules/menus/menus.routes';
+import { ordersRoutes } from './modules/orders/orders.routes';
 import { ownerRoutes } from './modules/owner/owner.routes';
 import { usersRoutes } from './modules/users/users.routes';
 import { authenticate } from './shared/middlewares/authenticate';
@@ -25,6 +26,7 @@ routes.use('/menus', menusRoutes); // público: cardápio do dia
 
 // Cliente
 routes.use('/addresses', authenticate, authorize('CUSTOMER'), addressesRoutes);
+routes.use('/orders', authenticate, authorize('CUSTOMER'), ordersRoutes);
 
 // Proprietária (Lucas): produtos, cardápios e taxas de entrega
 routes.use('/owner', authenticate, authorize('OWNER'), ownerRoutes);
