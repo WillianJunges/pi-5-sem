@@ -5,9 +5,9 @@ import { type DeliveryFeesService, deliveryFeesService } from '../delivery-fees/
 import { type Coordinates, geoService, STORE_LOCATION } from '../geo/geo.service';
 import type { MenuItemDetail } from '../menus/menu.types';
 import { menusRepository } from '../menus/menus.repository';
-import type { NewOrder, Order } from './order.types';
+import type { NewOrder, Order, OrderQuote } from './order.types';
 import { type OrdersRepository, ordersRepository } from './orders.repository';
-import type { CreateOrderInput } from './orders.schemas';
+import { type CreateOrderInput, MAX_ITEM_QUANTITY, type QuoteOrderInput } from './orders.schemas';
 
 /** Cardápio ativo de hoje com os itens (nomes e preços já resolvidos pela view vw_menu_items). */
 export interface TodayMenu {
@@ -27,6 +27,8 @@ async function loadTodayMenu(): Promise<TodayMenu | null> {
 }
 
 const km = (meters: number) => `${(meters / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km`;
+const brl = (cents: number) =>
+  (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace(/\s/g, ' ');
 
 /**
  * Pedidos do cliente (escopo, seções 9, 10, 11, 18 e 19).
@@ -50,8 +52,13 @@ export class OrdersService {
     return order;
   }
 
-  /** Finaliza o carrinho: valida, calcula os valores e grava o pedido como PENDING. */
-  async create(customerId: string, input: CreateOrderInput): Promise<Order> {
+  /**
+   * Prévia do pedido (POST /orders/quote): preços de hoje, distância, taxa e total, sem gravar.
+   * Itens que saíram do cardápio NÃO dão erro aqui: voltam em `unavailableVariantIds` para o
+   * app mostrar quais são; o subtotal considera só os disponíveis.
+   * Endereço sem localização, fora da área ou dia sem cardápio dão erro (não há o que calcular).
+   */
+  async quote(customerId: string, input: QuoteOrderInput): Promise<OrderQuote> {
     // 1. Endereço do próprio cliente, localizado no mapa
     const address = await this.addresses.findById(customerId, input.addressId);
     if (!address) throw new AppError('Endereço não encontrado', 404);
@@ -65,7 +72,7 @@ export class OrdersService {
 
     // 2. Itens com o preço que vale hoje (já com preço especial), direto do cardápio
     const menu = await this.todayMenu();
-    if (!menu) throw new AppError('Não há cardápio disponível hoje', 409);
+    if (!menu) throw new AppError('A marmitaria não está recebendo pedidos agora: não há cardápio para hoje.', 409);
 
     // a mesma variação repetida no carrinho vira um item só
     const quantities = new Map<string, number>();
@@ -74,9 +81,16 @@ export class OrdersService {
     }
 
     const items: NewOrder['items'] = [];
+    const unavailableVariantIds: string[] = [];
     for (const [variantId, quantity] of quantities) {
+      if (quantity > MAX_ITEM_QUANTITY) {
+        throw new AppError(`No máximo ${MAX_ITEM_QUANTITY} unidades por item`, 400);
+      }
       const item = menu.items.find((i) => i.variantId === variantId && i.available);
-      if (!item) throw new AppError('Um dos itens do carrinho não está mais disponível no cardápio de hoje', 409);
+      if (!item) {
+        unavailableVariantIds.push(variantId);
+        continue;
+      }
       items.push({
         productId: item.productId,
         variantId,
@@ -97,22 +111,8 @@ export class OrdersService {
 
     // 4. Valores (em centavos, sem erro de arredondamento)
     const subtotalCents = items.reduce((sum, i) => sum + i.subtotalCents, 0);
-    const totalCents = subtotalCents + fee.feeCents;
-
-    // 5. Pagamento: troco só para dinheiro, e precisa cobrir o total
-    let changeForCents: number | null = null;
-    if (input.paymentMethod === 'CASH' && input.changeFor !== null) {
-      if (input.changeFor < totalCents) {
-        throw new AppError('O valor para troco precisa ser maior ou igual ao total do pedido', 400);
-      }
-      changeForCents = input.changeFor;
-    }
-
-    const id = await this.orders.create(customerId, {
+    return {
       menuId: menu.menuId,
-      paymentMethod: input.paymentMethod,
-      changeForCents,
-      notes: input.notes,
       address: {
         addressId: address.id,
         label: address.label,
@@ -125,11 +125,57 @@ export class OrdersService {
         state: address.state,
         ...destination,
       },
+      items,
+      unavailableVariantIds,
       distanceMeters,
       subtotalCents,
       deliveryFeeCents: fee.feeCents,
-      totalCents,
-      items,
+      totalCents: subtotalCents + fee.feeCents,
+    };
+  }
+
+  /** Finaliza o carrinho: recalcula tudo (como na prévia), valida e grava o pedido como PENDING. */
+  async create(customerId: string, input: CreateOrderInput): Promise<Order> {
+    const quote = await this.quote(customerId, input);
+
+    const missing = quote.unavailableVariantIds.length;
+    if (missing > 0) {
+      throw new AppError(
+        missing === 1
+          ? 'Um item do carrinho saiu do cardápio de hoje. Volte ao carrinho para revisar.'
+          : `${missing} itens do carrinho saíram do cardápio de hoje. Volte ao carrinho para revisar.`,
+        409,
+      );
+    }
+
+    // o preço (ou a taxa) mudou entre a prévia e a confirmação: o cliente precisa ver o novo total
+    if (input.expectedTotal !== undefined && input.expectedTotal !== quote.totalCents) {
+      throw new AppError(
+        `O total do pedido mudou para ${brl(quote.totalCents)}. Confira os valores antes de confirmar.`,
+        409,
+      );
+    }
+
+    // Pagamento: troco só para dinheiro, e precisa cobrir o total
+    let changeForCents: number | null = null;
+    if (input.paymentMethod === 'CASH' && input.changeFor !== null) {
+      if (input.changeFor < quote.totalCents) {
+        throw new AppError(`O troco precisa ser para pelo menos ${brl(quote.totalCents)} (o total do pedido).`, 400);
+      }
+      changeForCents = input.changeFor;
+    }
+
+    const id = await this.orders.create(customerId, {
+      menuId: quote.menuId,
+      paymentMethod: input.paymentMethod,
+      changeForCents,
+      notes: input.notes,
+      address: quote.address,
+      distanceMeters: quote.distanceMeters,
+      subtotalCents: quote.subtotalCents,
+      deliveryFeeCents: quote.deliveryFeeCents,
+      totalCents: quote.totalCents,
+      items: quote.items,
     });
 
     // ------------------------------------------------------------------------------------
@@ -138,8 +184,9 @@ export class OrdersService {
     // [Lucas · Proprietária] Notificar a proprietária de "Novo pedido" (escopo, seção 22).
     //   O pedido já está gravado como PENDING; a tela/rota de administração de pedidos
     //   (GET /owner/orders, confirmar, preparar, pronto, cancelar) lê da tabela `orders`.
-    //   Ao mudar o status, preencher a coluna de horário correspondente (confirmed_at,
-    //   preparing_at, ready_at...). Valores e itens do pedido não devem ser alterados.
+    //   Basta fazer UPDATE orders SET status = ...: o trigger trg_orders_before_update
+    //   (database/schema/019) recusa transições fora do fluxo da seção 11 e preenche
+    //   sozinho o horário (confirmed_at, preparing_at...). Valores e itens não mudam.
     //
     // [Lucas + Yuri · Entregas] O escopo (seção 12) separa pedido e entrega (tabela
     //   `deliveries`, estados WAITING_ASSIGNMENT → ASSIGNED → IN_PROGRESS → COMPLETED).

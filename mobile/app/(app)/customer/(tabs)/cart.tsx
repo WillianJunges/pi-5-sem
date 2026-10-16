@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../../../../src/components/Button';
 import { EmptyState } from '../../../../src/components/EmptyState';
 import { QuantityStepper } from '../../../../src/components/QuantityStepper';
@@ -33,6 +33,14 @@ function CartRow({ item }: { item: CartItem }) {
 export default function CartScreen() {
   const { items, loading, subtotal, clear } = useCart();
 
+  // apagar tudo por engano não tem volta: pede confirmação
+  function confirmClear() {
+    Alert.alert('Limpar carrinho?', 'Todos os itens serão removidos.', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Limpar', style: 'destructive', onPress: () => clear() },
+    ]);
+  }
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -57,7 +65,7 @@ export default function CartScreen() {
         renderItem={({ item }) => <CartRow item={item} />}
         contentContainerStyle={styles.listContent}
         ListFooterComponent={
-          <Pressable onPress={clear} hitSlop={8} style={styles.clear}>
+          <Pressable onPress={confirmClear} hitSlop={8} style={styles.clear}>
             <Text style={styles.remove}>Limpar carrinho</Text>
           </Pressable>
         }

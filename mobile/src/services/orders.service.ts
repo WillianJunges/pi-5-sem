@@ -72,9 +72,25 @@ export interface CreateOrderInput {
   changeFor: number | null;
   notes: string | null;
   items: { variantId: string; quantity: number }[];
+  /** Total que o cliente viu na prévia: se mudou, o backend recusa em vez de cobrar outro valor. */
+  expectedTotal: number;
+}
+
+/** Resposta de POST /orders/quote: valores calculados pelo backend, sem gravar o pedido. */
+export interface OrderQuote {
+  /** Só os itens disponíveis hoje, com o preço que vale. */
+  items: Omit<OrderItem, 'id'>[];
+  /** Variações do carrinho que saíram do cardápio de hoje. */
+  unavailableVariantIds: string[];
+  distanceMeters: number;
+  subtotal: number;
+  deliveryFee: number;
+  total: number;
 }
 
 export const ordersService = {
+  quote: (data: Pick<CreateOrderInput, 'addressId' | 'items'>) =>
+    api<OrderQuote>('/orders/quote', { method: 'POST', body: data }),
   create: (data: CreateOrderInput) => api<Order>('/orders', { method: 'POST', body: data }),
   get: (id: string) => api<Order>(`/orders/${id}`),
 };
