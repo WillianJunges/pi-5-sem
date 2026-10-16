@@ -79,7 +79,7 @@ Código: `backend/src/config/mongo.ts` (conexão) e `backend/src/modules/access-
 
 Uso: histórico do cliente e painel da proprietária em **uma consulta**, sem JOIN.
 
-### `menus` — Proprietária
+### `menus` — Proprietária (implementado)
 
 ```json
 {
@@ -87,10 +87,23 @@ Uso: histórico do cliente e painel da proprietária em **uma consulta**, sem JO
   "date": "2026-10-15",
   "status": "ACTIVE",
   "items": [
-    { "productId": "...", "name": "Marmita Grande", "description": "...", "price": 25.0, "variations": ["Frango", "Carne"] }
-  ]
+    {
+      "productId": "...", "name": "Marmita de Frango", "description": "...", "category": "marmitas",
+      "price": 20.0,
+      "variations": [
+        { "variantId": "...", "name": "Pequena", "price": 20.0, "standardPrice": 20.0 },
+        { "variantId": "...", "name": "Média",   "price": 22.9, "standardPrice": 25.0 }
+      ]
+    }
+  ],
+  "updatedAt": "2026-10-15T11:00:00Z"
 }
 ```
+
+Cada variação tem o próprio preço (escopo, seção 7). `price` do produto é o menor deles ("a partir de").
+O documento é regravado sempre que o cardápio ativo ou o catálogo muda; ao encerrar, o status vira `CLOSED`.
+Se o Mongo estiver fora do ar, `GET /menus/today` lê do MySQL (view `vw_menu_items`).
+Código: `backend/src/modules/menus/menuSnapshots.repository.ts`.
 
 Uso: o app do cliente busca o cardápio do dia com uma única leitura.
 
