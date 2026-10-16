@@ -1,4 +1,4 @@
--- 012 - Functions do catálogo — módulo da Proprietária (Lucas)
+-- 014 - Functions do catálogo — módulo da Proprietária (Lucas)
 --
 -- fn_effective_price(preço padrão, preço especial)
 --     → o preço que vale no pedido. Regra do escopo (seção 8), escrita com CASE:

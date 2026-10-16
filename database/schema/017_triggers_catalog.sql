@@ -1,4 +1,4 @@
--- 015 - Triggers do catálogo — módulo da Proprietária (Lucas)
+-- 017 - Triggers do catálogo — módulo da Proprietária (Lucas)
 --
 -- trg_menu_items_before_insert / _before_update / _before_delete
 --     Bloqueiam qualquer alteração nos itens de um cardápio ENCERRADO: ele vira histórico.

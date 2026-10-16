@@ -1,4 +1,4 @@
--- 011 - Faixas de distância e taxa de entrega — módulo da Proprietária (Lucas)
+-- 013 - Faixas de distância e taxa de entrega — módulo da Proprietária (Lucas)
 --
 -- A proprietária cadastra as faixas manualmente (escopo, seção 19). Ex.:
 --   0 a 5 km → R$ 6,00 · 5 a 10 km → R$ 10,00 · 10 a 15 km → R$ 15,00

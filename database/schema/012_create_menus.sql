@@ -1,4 +1,4 @@
--- 010 - Cardápios e itens do cardápio — módulo da Proprietária (Lucas)
+-- 012 - Cardápios e itens do cardápio — módulo da Proprietária (Lucas)
 --
 -- O cardápio escolhe, do catálogo, o que está à venda em um dia (escopo, seção 8).
 -- Estados: DRAFT (rascunho) → ACTIVE (clientes veem) → CLOSED (encerrado).

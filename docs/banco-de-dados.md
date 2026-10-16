@@ -11,9 +11,9 @@ Os scripts ficam em `database/schema/` e são aplicados com `npm run db:migrate`
 | `users` | 001 | Usuários de todos os perfis (CUSTOMER, OWNER, COURIER) |
 | `refresh_tokens` | 002 | Sessões do app (hash do refresh token) |
 | `user_audit` | 003 | Histórico de mudanças em usuários |
-| `products` / `product_variants` | 009 | Catálogo: produtos e variações com preço padrão (Proprietária) |
-| `menus` / `menu_items` | 010 | Cardápios por dia e seus itens, com preço especial (Proprietária) |
-| `delivery_fee_ranges` | 011 | Faixas de distância e taxa de entrega (Proprietária) |
+| `products` / `product_variants` | 011 | Catálogo: produtos e variações com preço padrão (Proprietária) |
+| `menus` / `menu_items` | 012 | Cardápios por dia e seus itens, com preço especial (Proprietária) |
+| `delivery_fee_ranges` | 013 | Faixas de distância e taxa de entrega (Proprietária) |
 | `schema_migrations` | — | Controle de quais scripts já rodaram (criada pelo `db:migrate`) |
 
 ## Objetos programáveis
@@ -28,12 +28,12 @@ Os scripts ficam em `database/schema/` e são aplicados com `npm run db:migrate`
 | View | `vw_users` | 006 | Usuários sem a senha + nome do perfil + sessões ativas | `GET /users` (proprietária) |
 | Procedure | `sp_create_user(...)` | 007 | Valida dados e cria usuário + auditoria em **transação** | Cadastro (`POST /auth/register`) e `npm run user:create` |
 | Procedure | `sp_rotate_refresh_token(...)` | 008 | Renova a sessão de forma **atômica** (`SELECT ... FOR UPDATE`) | `POST /auth/refresh` |
-| Function | `fn_effective_price(preço, especial)` | 012 | Preço que vale, com **CASE**: especial se houver, senão o padrão | `vw_menu_items` |
-| Function | `fn_delivery_fee(metros)` | 012 | Taxa da faixa que cobre a distância (NULL = fora da área), com **CASE** para a faixa que começa em 0 | Módulo de pedidos |
-| View | `vw_menu_items` | 013 | Item do cardápio + produto + variação, com preço que vale e disponibilidade (**CASE**) | `GET /menus/today` e tela de cardápio |
-| Procedure | `sp_activate_menu(menu_id)` | 014 | Ativa o cardápio em **transação**: rascunho, com itens, todos disponíveis e nenhum outro ativo (`FOR UPDATE`) | `POST /owner/menus/:id/activate` |
-| Trigger | `trg_menu_items_before_insert/update/delete` | 015 | Bloqueiam mudanças em cardápio encerrado | Itens do cardápio |
-| Trigger | `trg_fee_ranges_before_insert/update` | 015 | Impedem faixas de taxa sobrepostas | Faixas de taxa |
+| Function | `fn_effective_price(preço, especial)` | 014 | Preço que vale, com **CASE**: especial se houver, senão o padrão | `vw_menu_items` |
+| Function | `fn_delivery_fee(metros)` | 014 | Taxa da faixa que cobre a distância (NULL = fora da área), com **CASE** para a faixa que começa em 0 | Módulo de pedidos |
+| View | `vw_menu_items` | 015 | Item do cardápio + produto + variação, com preço que vale e disponibilidade (**CASE**) | `GET /menus/today` e tela de cardápio |
+| Procedure | `sp_activate_menu(menu_id)` | 016 | Ativa o cardápio em **transação**: rascunho, com itens, todos disponíveis e nenhum outro ativo (`FOR UPDATE`) | `POST /owner/menus/:id/activate` |
+| Trigger | `trg_menu_items_before_insert/update/delete` | 017 | Bloqueiam mudanças em cardápio encerrado | Itens do cardápio |
+| Trigger | `trg_fee_ranges_before_insert/update` | 017 | Impedem faixas de taxa sobrepostas | Faixas de taxa |
 
 ## Transações e tratamento de erros
 
@@ -67,7 +67,7 @@ Cada integrante cria os objetos do seu módulo como novos scripts numerados, por
 
 - **Cliente**: `sp_create_order` (cria Order + OrderItems e calcula total em transação),
   `fn_order_total(order_id)`, `vw_customer_orders`.
-- **Proprietária**: já criados os scripts 009–015 (catálogo, cardápio e taxas, ver tabela acima).
+- **Proprietária**: já criados os scripts 011–017 (catálogo, cardápio e taxas, ver tabela acima).
   Ainda previstos, quando os pedidos existirem: `sp_change_order_status` (valida transição de status),
   `trg_orders_after_update` (histórico de status), `vw_daily_sales`.
 - **Motoboy**: `sp_finish_delivery` (com proteção contra finalização duplicada),

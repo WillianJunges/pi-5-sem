@@ -12,7 +12,7 @@ do **cardápio do dia**, usada pelo app do Cliente.
 
 ```bash
 cd backend
-npm run db:migrate          # aplica os scripts 009 a 015
+npm run db:migrate          # aplica os scripts 011 a 017
 npm run db:seed:catalog     # produtos do Di Casa, faixas de taxa e um cardápio ATIVO para hoje
 npm run dev
 # GET http://localhost:3333/menus/today  → cardápio do dia, sem login
@@ -113,7 +113,7 @@ Erros seguem o padrão do módulo base: `{ "error": "mensagem" }` (e `issues` qu
 
 ## Banco de dados
 
-Scripts `009` a `015` em `database/schema/`. Detalhes em [banco-de-dados.md](banco-de-dados.md).
+Scripts `011` a `017` em `database/schema/`. Detalhes em [banco-de-dados.md](banco-de-dados.md).
 O cardápio do dia também é copiado no MongoDB (coleção `menus`), ver [banco-nao-relacional.md](banco-nao-relacional.md).
 
 ## Testes

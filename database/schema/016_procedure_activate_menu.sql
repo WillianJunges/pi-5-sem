@@ -1,4 +1,4 @@
--- 014 - Procedure sp_activate_menu — módulo da Proprietária (Lucas)
+-- 016 - Procedure sp_activate_menu — módulo da Proprietária (Lucas)
 --
 -- Publica um cardápio (DRAFT → ACTIVE) em uma única transação.
 --

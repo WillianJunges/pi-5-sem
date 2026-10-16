@@ -1,4 +1,4 @@
--- 013 - View vw_menu_items — módulo da Proprietária (Lucas)
+-- 015 - View vw_menu_items — módulo da Proprietária (Lucas)
 --
 -- Junta cardápio, item, variação e produto numa linha só, já com:
 --   * effective_price — preço que vale (fn_effective_price: especial ou padrão)

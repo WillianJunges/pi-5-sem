@@ -1,4 +1,4 @@
--- 009 - Produtos e variações (catálogo da marmitaria) — módulo da Proprietária (Lucas)
+-- 011 - Produtos e variações (catálogo da marmitaria) — módulo da Proprietária (Lucas)
 --
 -- Um produto (ex.: "Marmita de Frango") tem uma ou mais variações (ex.: Pequena, Média,
 -- Grande), cada uma com seu preço padrão (escopo, seção 7).
