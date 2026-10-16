@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCart } from '../contexts/CartContext';
-import type { MenuItem } from '../services/customerMenu.service';
+import { isOnSale, type MenuItem, type MenuVariation } from '../services/customerMenu.service';
 import { colors, spacing } from '../theme';
 import { formatCurrency } from '../utils/format';
 import { Button } from './Button';
@@ -19,7 +19,7 @@ interface AddToCartSheetProps {
 export function AddToCartSheet({ item, menuDate, onClose }: AddToCartSheetProps) {
   const { add } = useCart();
   const insets = useSafeAreaInsets();
-  const [variation, setVariation] = useState<string | null>(null);
+  const [variation, setVariation] = useState<MenuVariation | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [saving, setSaving] = useState(false);
 
@@ -31,15 +31,21 @@ export function AddToCartSheet({ item, menuDate, onClose }: AddToCartSheetProps)
 
   if (!item) return null;
 
-  const needsVariation = item.variations.length > 0;
-  const canAdd = !needsVariation || variation !== null;
+  const samePrice = item.variations.every((v) => v.price === item.price);
 
   async function handleAdd() {
-    if (!item) return;
+    if (!item || !variation) return;
     setSaving(true);
     try {
       await add(
-        { productId: item.productId, name: item.name, variation, unitPrice: item.price, menuDate },
+        {
+          productId: item.productId,
+          variantId: variation.variantId,
+          name: item.name,
+          variation: variation.name,
+          unitPrice: variation.price,
+          menuDate,
+        },
         quantity,
       );
       onClose();
@@ -55,28 +61,34 @@ export function AddToCartSheet({ item, menuDate, onClose }: AddToCartSheetProps)
         <View>
           <Text style={styles.name}>{item.name}</Text>
           {item.description ? <Text style={styles.description}>{item.description}</Text> : null}
-          <Text style={styles.price}>{formatCurrency(item.price)}</Text>
+          <Text style={styles.price}>
+            {!variation && !samePrice ? 'a partir de ' : ''}
+            {formatCurrency(variation?.price ?? item.price)}
+          </Text>
         </View>
 
-        {needsVariation ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Escolha uma opção</Text>
-            <View style={styles.options}>
-              {item.variations.map((option) => {
-                const selected = option === variation;
-                return (
-                  <Pressable
-                    key={option}
-                    onPress={() => setVariation(option)}
-                    style={[styles.option, selected && styles.optionSelected]}
-                  >
-                    <Text style={[styles.optionText, selected && styles.optionTextSelected]}>{option}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        ) : null}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            {item.variations.length > 1 ? 'Escolha uma opção' : 'Opção'}
+          </Text>
+          {item.variations.map((option) => {
+            const selected = option.variantId === variation?.variantId;
+            return (
+              <Pressable
+                key={option.variantId}
+                onPress={() => setVariation(option)}
+                style={[styles.option, selected && styles.optionSelected]}
+              >
+                <View style={[styles.radio, selected && styles.radioSelected]} />
+                <Text style={styles.optionName}>{option.name}</Text>
+                {isOnSale(option) ? (
+                  <Text style={styles.standardPrice}>{formatCurrency(option.standardPrice)}</Text>
+                ) : null}
+                <Text style={styles.optionPrice}>{formatCurrency(option.price)}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
 
         <View style={styles.quantityRow}>
           <Text style={styles.sectionTitle}>Quantidade</Text>
@@ -84,9 +96,9 @@ export function AddToCartSheet({ item, menuDate, onClose }: AddToCartSheetProps)
         </View>
 
         <Button
-          title={canAdd ? `Adicionar · ${formatCurrency(item.price * quantity)}` : 'Escolha uma opção'}
+          title={variation ? `Adicionar · ${formatCurrency(variation.price * quantity)}` : 'Escolha uma opção'}
           onPress={handleAdd}
-          disabled={!canAdd}
+          disabled={!variation}
           loading={saving}
         />
       </View>
@@ -108,16 +120,21 @@ const styles = StyleSheet.create({
   price: { fontSize: 18, fontWeight: 'bold', color: colors.primary, marginTop: spacing.sm },
   section: { gap: spacing.sm },
   sectionTitle: { fontSize: 15, fontWeight: '600', color: colors.text },
-  options: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm + 2,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 20,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  optionSelected: { borderColor: colors.primary, backgroundColor: colors.primary },
-  optionText: { color: colors.text },
-  optionTextSelected: { color: colors.primaryText, fontWeight: '600' },
+  optionSelected: { borderColor: colors.primary, backgroundColor: '#FFF7ED' },
+  radio: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: colors.border },
+  radioSelected: { borderColor: colors.primary, borderWidth: 6 },
+  optionName: { flex: 1, fontSize: 15, color: colors.text },
+  standardPrice: { fontSize: 13, color: colors.muted, textDecorationLine: 'line-through' },
+  optionPrice: { fontSize: 15, fontWeight: '600', color: colors.text },
   quantityRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 });

@@ -1,37 +1,57 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, SectionList, StyleSheet, Text, View } from 'react-native';
 import { AddToCartSheet } from '../../../../src/components/AddToCartSheet';
 import { Button } from '../../../../src/components/Button';
 import { EmptyState } from '../../../../src/components/EmptyState';
 import { useAuth } from '../../../../src/contexts/AuthContext';
-import {
-  customerMenuService,
-  type Menu,
-  type MenuItem,
-  USE_MENU_MOCK,
-} from '../../../../src/services/customerMenu.service';
+import { customerMenuService, isOnSale, type Menu, type MenuItem } from '../../../../src/services/customerMenu.service';
 import { colors, spacing } from '../../../../src/theme';
 import { getErrorMessage } from '../../../../src/utils/errors';
 import { formatCurrency, formatLongDate } from '../../../../src/utils/format';
 
+/** "marmitas" → "Marmitas"; sem categoria → "Outros". */
+function categoryTitle(category: string | null): string {
+  return category ? category.charAt(0).toUpperCase() + category.slice(1) : 'Outros';
+}
+
+/** Agrupa os produtos por categoria, mantendo a ordem em que vêm da API. */
+function groupByCategory(items: MenuItem[]) {
+  const sections: { title: string; data: MenuItem[] }[] = [];
+  for (const item of items) {
+    const title = categoryTitle(item.category);
+    const section = sections.find((s) => s.title === title);
+    if (section) section.data.push(item);
+    else sections.push({ title, data: [item] });
+  }
+  return sections;
+}
+
 function MenuItemCard({ item, onPress }: { item: MenuItem; onPress(): void }) {
+  const samePrice = item.variations.every((v) => v.price === item.price);
+  const onSale = item.variations.some(isOnSale);
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && { opacity: 0.7 }]}>
       <View style={styles.cardHeader}>
         <Text style={styles.itemName}>{item.name}</Text>
-        <Text style={styles.price}>{formatCurrency(item.price)}</Text>
+        <View style={styles.priceBox}>
+          {!samePrice ? <Text style={styles.fromLabel}>a partir de</Text> : null}
+          <Text style={styles.price}>{formatCurrency(item.price)}</Text>
+        </View>
       </View>
       {item.description ? <Text style={styles.description}>{item.description}</Text> : null}
-      {item.variations.length > 0 ? (
+      {item.variations.length > 1 ? (
         <View style={styles.chips}>
           {item.variations.map((variation) => (
-            <Text key={variation} style={styles.chip}>
-              {variation}
+            <Text key={variation.variantId} style={[styles.chip, isOnSale(variation) && styles.chipSale]}>
+              {variation.name} · {formatCurrency(variation.price)}
             </Text>
           ))}
         </View>
       ) : null}
-      <Text style={styles.addHint}>Toque para adicionar</Text>
+      <View style={styles.cardFooter}>
+        {onSale ? <Text style={styles.saleBadge}>Promoção</Text> : null}
+        <Text style={styles.addHint}>Toque para adicionar</Text>
+      </View>
     </Pressable>
   );
 }
@@ -90,18 +110,19 @@ export default function MenuScreen() {
 
   return (
     <>
-      <FlatList
+      <SectionList
         style={styles.list}
         contentContainerStyle={styles.listContent}
-        data={isOpen ? menu.items : []}
+        sections={isOpen ? groupByCategory(menu.items) : []}
         keyExtractor={(item) => item.productId}
         renderItem={({ item }) => <MenuItemCard item={item} onPress={() => setSelected(item)} />}
+        renderSectionHeader={({ section }) => <Text style={styles.sectionTitle}>{section.title}</Text>}
+        stickySectionHeadersEnabled={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
         }
         ListHeaderComponent={
           <View style={styles.header}>
-            {USE_MENU_MOCK ? <Text style={styles.mockBadge}>Dados de exemplo</Text> : null}
             <Text style={styles.greeting}>Olá, {user?.name.split(' ')[0]}!</Text>
             <Text style={styles.title}>Cardápio de hoje</Text>
             {menu ? <Text style={styles.date}>{formatLongDate(menu.date)}</Text> : null}
@@ -125,24 +146,14 @@ const styles = StyleSheet.create({
   list: { flex: 1, backgroundColor: colors.background },
   listContent: { flexGrow: 1, padding: spacing.md, gap: spacing.md },
   header: { gap: 2, marginBottom: spacing.xs },
-  mockBadge: {
-    alignSelf: 'flex-start',
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: 4,
-    overflow: 'hidden',
-    backgroundColor: '#FEF3C7',
-    color: '#92400E',
-    fontSize: 12,
-    fontWeight: '600',
-  },
   greeting: { fontSize: 16, color: colors.muted },
   title: { fontSize: 26, fontWeight: 'bold', color: colors.text },
   date: { color: colors.muted, textTransform: 'capitalize' },
   card: { backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md, gap: spacing.sm },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.sm },
   itemName: { flex: 1, fontSize: 17, fontWeight: '600', color: colors.text },
+  priceBox: { alignItems: 'flex-end' },
+  fromLabel: { fontSize: 11, color: colors.muted },
   price: { fontSize: 17, fontWeight: 'bold', color: colors.primary },
   description: { color: colors.muted },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
@@ -154,6 +165,19 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     color: colors.text,
     fontSize: 13,
+  },
+  chipSale: { borderColor: colors.primary, color: colors.primary },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: colors.text, marginTop: spacing.sm },
+  cardFooter: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  saleBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: 4,
+    overflow: 'hidden',
+    backgroundColor: colors.primary,
+    color: colors.primaryText,
+    fontSize: 12,
+    fontWeight: '600',
   },
   addHint: { fontSize: 13, fontWeight: '600', color: colors.primary },
 });
