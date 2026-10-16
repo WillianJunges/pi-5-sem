@@ -128,6 +128,17 @@ export const cartStorage = {
     }
   },
 
+  /** Atualiza o preço guardado com o que o backend calculou na prévia do checkout. */
+  async setUnitPrice(userId: string, id: string, unitPrice: number): Promise<void> {
+    const db = await getDb();
+    await db.runAsync(
+      'UPDATE cart_items SET unit_price = ? WHERE user_id = ? AND variant_id = ?',
+      unitPrice,
+      userId,
+      id,
+    );
+  },
+
   async clear(userId: string): Promise<void> {
     const db = await getDb();
     await db.runAsync('DELETE FROM cart_items WHERE user_id = ?', userId);

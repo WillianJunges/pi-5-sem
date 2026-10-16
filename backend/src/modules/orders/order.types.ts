@@ -68,3 +68,17 @@ export interface Order {
 export type NewOrder = Omit<Order, 'id' | 'customerId' | 'status' | 'items' | `${string}At`> & {
   items: Omit<OrderItem, 'id'>[];
 };
+
+/** Prévia dos valores (POST /orders/quote). Também é a base do pedido gravado. */
+export interface OrderQuote {
+  menuId: string;
+  address: OrderAddress;
+  /** Só os itens disponíveis hoje, com o preço aplicado. */
+  items: Omit<OrderItem, 'id'>[];
+  /** Variações do carrinho que saíram do cardápio de hoje. */
+  unavailableVariantIds: string[];
+  distanceMeters: number;
+  subtotalCents: number;
+  deliveryFeeCents: number;
+  totalCents: number;
+}

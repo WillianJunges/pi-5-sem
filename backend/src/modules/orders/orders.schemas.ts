@@ -33,6 +33,16 @@ export const createOrderSchema = z.object({
     )
     .min(1, 'O carrinho está vazio')
     .max(30, 'Itens demais no pedido'),
+  /**
+   * Total que o cliente viu na prévia (opcional). Não é usado no cálculo: serve só para
+   * recusar o pedido se o valor mudou entre a prévia e a confirmação.
+   */
+  expectedTotal: reaisSchema('Total').optional(),
 });
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
+
+/** Corpo de POST /orders/quote: prévia dos valores, sem gravar nada. */
+export const quoteOrderSchema = createOrderSchema.pick({ addressId: true, items: true });
+
+export type QuoteOrderInput = z.infer<typeof quoteOrderSchema>;

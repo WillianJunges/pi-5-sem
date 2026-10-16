@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from 'expo-router';
-import { type ReactNode, useCallback, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -16,7 +16,12 @@ import { EmptyState } from '../../../src/components/EmptyState';
 import { TextField } from '../../../src/components/TextField';
 import { useCart } from '../../../src/contexts/CartContext';
 import { type Address, addressesService, addressLine } from '../../../src/services/addresses.service';
-import { ordersService, PAYMENT_LABEL, type PaymentMethod } from '../../../src/services/orders.service';
+import {
+  type OrderQuote,
+  ordersService,
+  PAYMENT_LABEL,
+  type PaymentMethod,
+} from '../../../src/services/orders.service';
 import { colors, spacing } from '../../../src/theme';
 import { getErrorMessage } from '../../../src/utils/errors';
 import { formatCurrency } from '../../../src/utils/format';
@@ -46,8 +51,13 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
  * O app só envia variação + quantidade; preços, taxa e total vêm do backend.
  */
 export default function CheckoutScreen() {
-  const { items, subtotal, clear } = useCart();
+  const { items, clear, remove, updatePrices } = useCart();
   const [addresses, setAddresses] = useState<Address[] | null>(null);
+  const [quote, setQuote] = useState<OrderQuote | null>(null);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [quoting, setQuoting] = useState(false);
+  const [priceChanges, setPriceChanges] = useState<string[]>([]);
+  const [quoteRequest, setQuoteRequest] = useState(0);
   const [addressId, setAddressId] = useState<string | null>(null);
   const [payment, setPayment] = useState<PaymentMethod>('PIX');
   const [needsChange, setNeedsChange] = useState(false);
@@ -72,6 +82,51 @@ export default function CheckoutScreen() {
     }, []),
   );
 
+  // o que muda a prévia: endereço e variação/quantidade (não o preço, que vem do backend)
+  const cartKey = items.map((i) => `${i.variantId}:${i.quantity}`).join(',');
+
+  // prévia (POST /orders/quote): preços de hoje, distância, taxa e total calculados no backend
+  useEffect(() => {
+    if (!addressId || items.length === 0) return;
+    let stale = false;
+    setQuoting(true);
+    setQuoteError(null);
+    ordersService
+      .quote({ addressId, items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })) })
+      .then(async (result) => {
+        if (stale) return;
+        setQuote(result);
+        // o preço guardado no carrinho é o do momento em que o item foi adicionado
+        const changed: string[] = [];
+        const prices: Record<string, number> = {};
+        for (const q of result.items) {
+          const item = items.find((i) => i.variantId === q.variantId);
+          if (item && Math.abs(item.unitPrice - q.unitPrice) > 0.001) {
+            changed.push(
+              `${item.name} · ${item.variation}: de ${formatCurrency(item.unitPrice)} para ${formatCurrency(q.unitPrice)}`,
+            );
+            prices[q.variantId] = q.unitPrice;
+          }
+        }
+        if (changed.length > 0) {
+          setPriceChanges((current) => [...new Set([...current, ...changed])]);
+          await updatePrices(prices);
+        }
+      })
+      .catch((err) => {
+        if (stale) return;
+        setQuote(null);
+        setQuoteError(getErrorMessage(err));
+      })
+      .finally(() => {
+        if (!stale) setQuoting(false);
+      });
+    return () => {
+      stale = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recalcula só quando endereço ou itens mudam
+  }, [addressId, cartKey, quoteRequest]);
+
   if (items.length === 0) {
     return (
       <EmptyState icon="🛒" title="Seu carrinho está vazio" message="Escolha uma marmita no cardápio.">
@@ -86,11 +141,12 @@ export default function CheckoutScreen() {
       setError('Escolha um endereço de entrega.');
       return;
     }
+    if (!quote) return;
     let change: number | null = null;
     if (payment === 'CASH' && needsChange) {
       change = parseMoney(changeFor);
-      if (!Number.isFinite(change) || change <= subtotal) {
-        setError(`Informe um valor para troco maior que ${formatCurrency(subtotal)}.`);
+      if (!Number.isFinite(change) || change < quote.total) {
+        setError(`O troco precisa ser para pelo menos ${formatCurrency(quote.total)} (o total do pedido).`);
         return;
       }
     }
@@ -103,6 +159,7 @@ export default function CheckoutScreen() {
         changeFor: change,
         notes: notes.trim() || null,
         items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })),
+        expectedTotal: quote.total,
       });
       // troca de tela antes de limpar, para não piscar a tela de "carrinho vazio"
       router.replace(`/customer/order/${order.id}`);
@@ -110,8 +167,13 @@ export default function CheckoutScreen() {
     } catch (err) {
       setError(getErrorMessage(err));
       setSubmitting(false);
+      // algo mudou (preço, cardápio, taxa): refaz a prévia para mostrar os valores atuais
+      setQuoteRequest((n) => n + 1);
     }
   }
+
+  const unavailable = items.filter((i) => quote?.unavailableVariantIds.includes(i.variantId));
+  const canConfirm = !!addressId && !!quote && !quoting && unavailable.length === 0;
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -192,29 +254,79 @@ export default function CheckoutScreen() {
         </Section>
 
         <Section title="Resumo">
-          {items.map((item) => (
-            <View key={item.id} style={styles.summaryRow}>
-              <Text style={styles.summaryItem}>
-                {item.quantity}x {item.name} · {item.variation}
+          {unavailable.length > 0 ? (
+            <View style={[styles.notice, styles.noticeDanger]}>
+              <Text style={styles.noticeTitle}>
+                {unavailable.length === 1 ? 'Este item saiu' : 'Estes itens saíram'} do cardápio de hoje:
               </Text>
-              <Text style={styles.optionText}>{formatCurrency(item.unitPrice * item.quantity)}</Text>
+              {unavailable.map((i) => (
+                <Text key={i.id} style={styles.optionText}>
+                  • {i.name} · {i.variation}
+                </Text>
+              ))}
+              <Button
+                title="Remover do carrinho"
+                variant="outline"
+                onPress={async () => {
+                  for (const i of unavailable) await remove(i.id);
+                }}
+              />
             </View>
-          ))}
+          ) : null}
+
+          {priceChanges.length > 0 ? (
+            <View style={styles.notice}>
+              <Text style={styles.noticeTitle}>Alguns preços mudaram desde que você montou o carrinho:</Text>
+              {priceChanges.map((change) => (
+                <Text key={change} style={styles.optionText}>
+                  • {change}
+                </Text>
+              ))}
+            </View>
+          ) : null}
+
+          {items
+            .filter((item) => !unavailable.includes(item))
+            .map((item) => (
+              <View key={item.id} style={styles.summaryRow}>
+                <Text style={styles.summaryItem}>
+                  {item.quantity}x {item.name} · {item.variation}
+                </Text>
+                <Text style={styles.optionText}>{formatCurrency(item.unitPrice * item.quantity)}</Text>
+              </View>
+            ))}
+
           <View style={[styles.summaryRow, styles.summaryDivider]}>
             <Text style={styles.optionText}>Subtotal</Text>
-            <Text style={styles.optionText}>{formatCurrency(subtotal)}</Text>
+            <Text style={styles.optionText}>{quote ? formatCurrency(quote.subtotal) : '—'}</Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.optionText}>Taxa de entrega</Text>
-            <Text style={styles.muted}>calculada ao confirmar</Text>
+            <Text style={styles.optionText}>
+              Taxa de entrega
+              {quote ? ` (${(quote.distanceMeters / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km)` : ''}
+            </Text>
+            {quoting ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Text style={styles.optionText}>{quote ? formatCurrency(quote.deliveryFee) : '—'}</Text>
+            )}
           </View>
-          <Text style={styles.muted}>
-            Os preços são conferidos pela marmitaria na hora do pedido. O total final aparece na próxima tela.
-          </Text>
+          <View style={styles.summaryRow}>
+            <Text style={styles.total}>Total</Text>
+            <Text style={styles.total}>{quote && !quoting ? formatCurrency(quote.total) : '—'}</Text>
+          </View>
+          {quoteError ? (
+            <View style={[styles.notice, styles.noticeDanger]}>
+              <Text style={styles.optionText}>{quoteError}</Text>
+              <Pressable onPress={() => setQuoteRequest((n) => n + 1)} hitSlop={8}>
+                <Text style={styles.link}>Tentar de novo</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </Section>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Button title="Confirmar pedido" onPress={handleConfirm} loading={submitting} disabled={!addressId} />
+        <Button title="Confirmar pedido" onPress={handleConfirm} loading={submitting} disabled={!canConfirm} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -253,4 +365,8 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
   error: { fontSize: 14, color: colors.danger },
+  total: { fontSize: 17, fontWeight: 'bold', color: colors.text },
+  notice: { gap: spacing.xs, padding: spacing.md, borderRadius: 10, backgroundColor: '#FFF7ED' },
+  noticeDanger: { backgroundColor: '#FEF2F2' },
+  noticeTitle: { fontSize: 14, fontWeight: '600', color: colors.text },
 });

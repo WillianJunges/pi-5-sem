@@ -14,6 +14,8 @@ interface CartContextValue {
   add(item: NewCartItem, quantity: number): Promise<void>;
   setQuantity(id: string, quantity: number): Promise<void>;
   remove(id: string): Promise<void>;
+  /** Grava os preços calculados pelo backend (variantId → preço em reais). */
+  updatePrices(prices: Record<string, number>): Promise<void>;
   clear(): Promise<void>;
 }
 
@@ -51,6 +53,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
       add: (item, quantity) => run((uid) => cartStorage.add(uid, item, quantity)),
       setQuantity: (id, quantity) => run((uid) => cartStorage.setQuantity(uid, id, quantity)),
       remove: (id) => run((uid) => cartStorage.setQuantity(uid, id, 0)),
+      updatePrices: (prices) =>
+        run(async (uid) => {
+          for (const [id, price] of Object.entries(prices)) await cartStorage.setUnitPrice(uid, id, price);
+        }),
       clear: () => run((uid) => cartStorage.clear(uid)),
     };
   }, [items, loading, userId, reload]);
