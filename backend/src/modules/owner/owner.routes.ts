@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { deliveryFeesController } from '../delivery-fees/deliveryFees.controller';
 import { menusController } from '../menus/menus.controller';
+import { ownerOrdersController } from '../owner-orders/ownerOrders.controller';
 import { productsController } from '../products/products.controller';
 
 /**
@@ -39,3 +40,11 @@ ownerRoutes.get('/delivery-fees/quote', deliveryFeesController.quote);
 ownerRoutes.post('/delivery-fees', deliveryFeesController.create);
 ownerRoutes.put('/delivery-fees/:id', deliveryFeesController.update);
 ownerRoutes.delete('/delivery-fees/:id', deliveryFeesController.remove);
+
+// Administração de pedidos (escopo, seção 11)
+ownerRoutes.get('/orders', ownerOrdersController.list);
+ownerRoutes.get('/orders/:id', ownerOrdersController.get);
+ownerRoutes.post('/orders/:id/confirm', ownerOrdersController.confirm);
+ownerRoutes.post('/orders/:id/prepare', ownerOrdersController.prepare);
+ownerRoutes.post('/orders/:id/ready', ownerOrdersController.ready);
+ownerRoutes.post('/orders/:id/cancel', ownerOrdersController.cancel);
