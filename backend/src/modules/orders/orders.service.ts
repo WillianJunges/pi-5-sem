@@ -5,9 +5,14 @@ import { type DeliveryFeesService, deliveryFeesService } from '../delivery-fees/
 import { type Coordinates, geoService, STORE_LOCATION } from '../geo/geo.service';
 import type { MenuItemDetail } from '../menus/menu.types';
 import { menusRepository } from '../menus/menus.repository';
-import type { NewOrder, Order, OrderQuote } from './order.types';
+import type { NewOrder, Order, OrderQuote, OrderSummary } from './order.types';
 import { type OrdersRepository, ordersRepository } from './orders.repository';
-import { type CreateOrderInput, MAX_ITEM_QUANTITY, type QuoteOrderInput } from './orders.schemas';
+import {
+  type CreateOrderInput,
+  type ListOrdersInput,
+  MAX_ITEM_QUANTITY,
+  type QuoteOrderInput,
+} from './orders.schemas';
 
 /** Cardápio ativo de hoje com os itens (nomes e preços já resolvidos pela view vw_menu_items). */
 export interface TodayMenu {
@@ -50,6 +55,12 @@ export class OrdersService {
     const order = await this.orders.findByCustomer(customerId, id);
     if (!order) throw new AppError('Pedido não encontrado', 404);
     return order;
+  }
+
+  /** Histórico (GET /orders): pede um a mais para saber se existe próxima página. */
+  async list(customerId: string, { limit, offset }: ListOrdersInput): Promise<{ orders: OrderSummary[]; hasMore: boolean }> {
+    const rows = await this.orders.listByCustomer(customerId, limit + 1, offset);
+    return { orders: rows.slice(0, limit), hasMore: rows.length > limit };
   }
 
   /**

@@ -46,3 +46,11 @@ export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 export const quoteOrderSchema = createOrderSchema.pick({ addressId: true, items: true });
 
 export type QuoteOrderInput = z.infer<typeof quoteOrderSchema>;
+
+/** Query de GET /orders: página do histórico (mais novos primeiro). */
+export const listOrdersSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export type ListOrdersInput = z.infer<typeof listOrdersSchema>;

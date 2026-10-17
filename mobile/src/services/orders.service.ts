@@ -65,6 +65,23 @@ export interface Order {
   createdAt: string;
 }
 
+/** Linha do histórico (GET /orders). */
+export interface OrderSummary {
+  id: string;
+  status: OrderStatus;
+  /** true enquanto não foi entregue nem cancelado. */
+  isActive: boolean;
+  paymentMethod: PaymentMethod;
+  addressLabel: string | null;
+  addressStreet: string;
+  addressNumber: string;
+  itemCount: number;
+  /** "2x Marmita de Frango (Média), 1x Coca-Cola (Lata 350 ml)" */
+  itemsSummary: string;
+  total: number;
+  createdAt: string;
+}
+
 /** O app manda só o que o cliente escolheu; preços e total são calculados no backend. */
 export interface CreateOrderInput {
   addressId: string;
@@ -89,6 +106,8 @@ export interface OrderQuote {
 }
 
 export const ordersService = {
+  list: (offset = 0, limit = 20) =>
+    api<{ orders: OrderSummary[]; hasMore: boolean }>(`/orders?limit=${limit}&offset=${offset}`),
   quote: (data: Pick<CreateOrderInput, 'addressId' | 'items'>) =>
     api<OrderQuote>('/orders/quote', { method: 'POST', body: data }),
   create: (data: CreateOrderInput) => api<Order>('/orders', { method: 'POST', body: data }),

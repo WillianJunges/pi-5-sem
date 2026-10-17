@@ -3,13 +3,29 @@ import type { RowDataPacket } from 'mysql2/promise';
 import { db } from '../../config/database';
 import { translateDatabaseError } from '../../shared/errors/databaseErrors';
 import { centsToDecimal, decimalToCents } from '../../shared/utils/money';
-import type { NewOrder, Order, OrderItem, OrderStatus, PaymentMethod } from './order.types';
+import type { NewOrder, Order, OrderItem, OrderStatus, OrderSummary, PaymentMethod } from './order.types';
 
 export interface OrdersRepository {
   /** Grava o pedido e os itens numa transação. Devolve o id. */
   create(customerId: string, order: NewOrder): Promise<string>;
   /** Pedido do cliente (null se não existir ou for de outro cliente). */
   findByCustomer(customerId: string, id: string): Promise<Order | null>;
+  /** Histórico do cliente, mais novos primeiro. */
+  listByCustomer(customerId: string, limit: number, offset: number): Promise<OrderSummary[]>;
+}
+
+interface OrderSummaryRow extends RowDataPacket {
+  id: string;
+  status: OrderStatus;
+  is_active: number;
+  payment_method: PaymentMethod;
+  address_label: string | null;
+  address_street: string;
+  address_number: string;
+  total: string;
+  item_count: string | number;
+  items_summary: string;
+  created_at: Date;
 }
 
 interface OrderRow extends RowDataPacket {
@@ -183,6 +199,31 @@ export class MySqlOrdersRepository implements OrdersRepository {
     );
     return mapOrder(rows[0], items.map(mapItem));
   }
+
+  async listByCustomer(customerId: string, limit: number, offset: number): Promise<OrderSummary[]> {
+    const [rows] = await db.query<OrderSummaryRow[]>(
+      `SELECT * FROM vw_customer_orders WHERE customer_id = ?
+        ORDER BY created_at DESC, id LIMIT ? OFFSET ?`,
+      [customerId, limit, offset],
+    );
+    return rows.map(mapSummary);
+  }
+}
+
+export function mapSummary(row: OrderSummaryRow): OrderSummary {
+  return {
+    id: row.id,
+    status: row.status,
+    isActive: Boolean(row.is_active),
+    paymentMethod: row.payment_method,
+    addressLabel: row.address_label,
+    addressStreet: row.address_street,
+    addressNumber: row.address_number,
+    totalCents: decimalToCents(row.total),
+    itemCount: Number(row.item_count),
+    itemsSummary: row.items_summary,
+    createdAt: row.created_at,
+  };
 }
 
 export const ordersRepository: OrdersRepository = new MySqlOrdersRepository();

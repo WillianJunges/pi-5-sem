@@ -1,8 +1,8 @@
 import type { Request, Response } from 'express';
 import { fromCents } from '../../shared/utils/money';
 import { idParam } from '../../shared/utils/params';
-import type { Order, OrderQuote } from './order.types';
-import { createOrderSchema, quoteOrderSchema } from './orders.schemas';
+import type { Order, OrderQuote, OrderSummary } from './order.types';
+import { createOrderSchema, listOrdersSchema, quoteOrderSchema } from './orders.schemas';
 import { ordersService } from './orders.service';
 
 /** Pedido como o app recebe: valores em reais, sem o id do cliente. */
@@ -38,7 +38,18 @@ export function toQuoteResponse(quote: OrderQuote) {
   };
 }
 
+/** Linha do histórico como o app recebe: total em reais. */
+export function toSummaryResponse({ totalCents, ...summary }: OrderSummary) {
+  return { ...summary, total: fromCents(totalCents) };
+}
+
 export const ordersController = {
+  /** GET /orders?limit=20&offset=0 — histórico do cliente logado, mais novos primeiro. */
+  async list(req: Request, res: Response) {
+    const { orders, hasMore } = await ordersService.list(req.user!.id, listOrdersSchema.parse(req.query));
+    res.json({ orders: orders.map(toSummaryResponse), hasMore });
+  },
+
   /** POST /orders/quote — prévia dos valores no checkout (não grava nada). */
   async quote(req: Request, res: Response) {
     const input = quoteOrderSchema.parse(req.body);
