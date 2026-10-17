@@ -82,3 +82,20 @@ export interface OrderQuote {
   deliveryFeeCents: number;
   totalCents: number;
 }
+
+/** Linha do histórico (vw_customer_orders): o pedido resumido, sem os itens detalhados. */
+export interface OrderSummary {
+  id: string;
+  status: OrderStatus;
+  /** true enquanto não foi entregue nem cancelado. */
+  isActive: boolean;
+  paymentMethod: PaymentMethod;
+  addressLabel: string | null;
+  addressStreet: string;
+  addressNumber: string;
+  totalCents: number;
+  itemCount: number;
+  /** "2x Marmita de Frango (Média), 1x Coca-Cola (Lata 350 ml)" */
+  itemsSummary: string;
+  createdAt: Date;
+}

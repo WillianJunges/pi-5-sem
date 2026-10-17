@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { Address } from '../../src/modules/addresses/address.types';
 import { DeliveryFeesService } from '../../src/modules/delivery-fees/deliveryFees.service';
 import type { MenuItemDetail } from '../../src/modules/menus/menu.types';
-import type { NewOrder, Order } from '../../src/modules/orders/order.types';
+import type { NewOrder, Order, OrderSummary } from '../../src/modules/orders/order.types';
 import type { OrdersRepository } from '../../src/modules/orders/orders.repository';
-import { createOrderSchema } from '../../src/modules/orders/orders.schemas';
+import { createOrderSchema, listOrdersSchema } from '../../src/modules/orders/orders.schemas';
 import { OrdersService, type TodayMenu } from '../../src/modules/orders/orders.service';
 import { expectAppError } from '../support/expectError';
 import { MemoryDeliveryFeesRepository } from '../support/memoryRepositories';
@@ -72,6 +72,25 @@ class MemoryOrdersRepository implements OrdersRepository {
       deliveredAt: null,
       cancelledAt: null,
     } satisfies Order;
+  }
+  async listByCustomer(customerId: string, limit: number, offset: number): Promise<OrderSummary[]> {
+    return this.saved
+      .filter((o) => o.customerId === customerId)
+      .reverse() // mais novos primeiro
+      .slice(offset, offset + limit)
+      .map((o) => ({
+        id: o.id,
+        status: 'PENDING',
+        isActive: true,
+        paymentMethod: o.paymentMethod,
+        addressLabel: o.address.label,
+        addressStreet: o.address.street,
+        addressNumber: o.address.number,
+        totalCents: o.totalCents,
+        itemCount: o.items.reduce((sum, i) => sum + i.quantity, 0),
+        itemsSummary: '',
+        createdAt: new Date(),
+      }));
   }
 }
 
@@ -203,6 +222,34 @@ describe('Pedidos — cálculo e validação', () => {
     it('o pedido guarda uma cópia do endereço', async () => {
       const order = await service.create(CUSTOMER, body({ items }));
       expect(order.address).toMatchObject({ street: 'Rua Prudente de Moraes', number: '100', latitude: -23.088 });
+    });
+  });
+
+  describe('histórico (GET /orders)', () => {
+    const items = [{ variantId: V2, quantity: 1 }];
+
+    it('lista só os pedidos do próprio cliente, mais novos primeiro', async () => {
+      await service.create(CUSTOMER, body({ items }));
+      await service.create(CUSTOMER, body({ items: [{ variantId: V2, quantity: 2 }] }));
+      await orders.create('outro', (await service.quote(CUSTOMER, body({ items }))) as unknown as NewOrder);
+      const { orders: list, hasMore } = await service.list(CUSTOMER, listOrdersSchema.parse({}));
+      expect(list.map((o) => o.id)).toEqual(['o2', 'o1']);
+      expect(list[0].itemCount).toBe(2);
+      expect(hasMore).toBe(false);
+    });
+
+    it('pagina e avisa quando há mais pedidos', async () => {
+      for (let i = 0; i < 3; i++) await service.create(CUSTOMER, body({ items }));
+      const first = await service.list(CUSTOMER, listOrdersSchema.parse({ limit: '2' }));
+      expect(first.orders.map((o) => o.id)).toEqual(['o3', 'o2']);
+      expect(first.hasMore).toBe(true);
+      const second = await service.list(CUSTOMER, listOrdersSchema.parse({ limit: '2', offset: '2' }));
+      expect(second.orders.map((o) => o.id)).toEqual(['o1']);
+      expect(second.hasMore).toBe(false);
+    });
+
+    it.each([{ limit: '0' }, { limit: '51' }, { offset: '-1' }, { limit: 'abc' }])('query inválida %o', (query) => {
+      expect(() => listOrdersSchema.parse(query)).toThrow();
     });
   });
 
