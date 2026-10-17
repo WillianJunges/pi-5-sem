@@ -28,3 +28,27 @@ export function translateDatabaseError(err: unknown): unknown {
     dbError.errno === 1062 && dbError.sqlMessage?.startsWith('Duplicate') ? 'Registro duplicado' : dbError.sqlMessage;
   return new AppError(message ?? 'Erro no banco de dados', status);
 }
+
+/**
+ * Códigos que o mysql2 usa quando não consegue falar com o banco (MySQL desligado,
+ * host errado, rede caída, conexão derrubada no meio da consulta, limite de conexões).
+ */
+const UNAVAILABLE_CODES = new Set([
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'ENOTFOUND',
+  'EHOSTUNREACH',
+  'EAI_AGAIN',
+  'PROTOCOL_CONNECTION_LOST',
+  'ER_CON_COUNT_ERROR',
+]);
+
+/** Indica que o erro foi falta de conexão com o banco (não um erro de SQL ou de regra). */
+export function isDatabaseUnavailable(err: unknown): boolean {
+  const code = (err as { code?: string } | null)?.code;
+  if (code && UNAVAILABLE_CODES.has(code)) return true;
+  // Falhas de conexão em paralelo podem chegar agrupadas (AggregateError).
+  const errors = (err as { errors?: unknown[] } | null)?.errors;
+  return Array.isArray(errors) && errors.length > 0 && errors.every(isDatabaseUnavailable);
+}

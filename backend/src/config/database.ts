@@ -9,6 +9,9 @@ export const db = mysql.createPool({
   ...env.db,
   connectionLimit: 10,
   timezone: 'Z',
+  // Tempo máximo para abrir uma conexão: com o banco fora do ar, a requisição falha
+  // em poucos segundos (503) em vez de deixar o app esperando.
+  connectTimeout: 5000,
 });
 
 // Datas sempre em UTC (inclusive NOW()/CURRENT_TIMESTAMP); o app converte para o fuso local.

@@ -19,6 +19,9 @@ interface RequestOptions {
   auth?: boolean;
 }
 
+/** Tempo máximo de espera por uma resposta da API. */
+const REQUEST_TIMEOUT_MS = 10_000;
+
 let sessionExpiredListener: (() => void) | null = null;
 
 /** Chamado quando não é mais possível renovar a sessão (usuário precisa logar de novo). */
@@ -31,11 +34,24 @@ async function send(path: string, { method = 'GET', body, auth = true }: Request
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (auth && accessToken) headers.Authorization = `Bearer ${accessToken}`;
 
-  return fetch(`${API_URL}${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  // Sem resposta em REQUEST_TIMEOUT_MS, cancela a requisição para o app não ficar girando.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(`${API_URL}${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+  } catch {
+    // status 0 = nenhuma resposta do servidor (tempo esgotado ou sem conexão).
+    throw controller.signal.aborted
+      ? new ApiError('O servidor demorou para responder. Tente novamente.', 0)
+      : new ApiError('Não foi possível conectar ao servidor. Verifique sua internet.', 0);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // Evita disparar vários refresh ao mesmo tempo quando várias requisições recebem 401.
