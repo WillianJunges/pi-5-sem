@@ -11,3 +11,12 @@ export function getErrorMessage(err: unknown): string {
   }
   return 'Algo deu errado. Tente novamente.';
 }
+
+/**
+ * Falta de conexão (sem internet, servidor sem responder ou banco fora do ar),
+ * em vez de um erro de verdade. Nesses casos a tela pode usar a cópia salva.
+ */
+export function isConnectionError(err: unknown): boolean {
+  if (err instanceof ApiError) return err.status === 0 || err.status === 503;
+  return err instanceof TypeError;
+}

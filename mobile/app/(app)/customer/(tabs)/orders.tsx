@@ -7,7 +7,7 @@ import { useAuth } from '../../../../src/contexts/AuthContext';
 import { ordersCache } from '../../../../src/services/ordersCache';
 import { ORDER_STATUS_LABEL, type OrderStatus, type OrderSummary, ordersService } from '../../../../src/services/orders.service';
 import { colors, spacing } from '../../../../src/theme';
-import { getErrorMessage } from '../../../../src/utils/errors';
+import { getErrorMessage, isConnectionError } from '../../../../src/utils/errors';
 import { formatCurrency } from '../../../../src/utils/format';
 
 const STATUS_COLORS: Record<OrderStatus, { bg: string; fg: string }> = {
@@ -78,6 +78,11 @@ export default function OrdersScreen() {
       hasData.current = true;
       await ordersCache.save(userId, page.orders);
     } catch (err) {
+      // Erro de verdade (ex.: 500): mostra a mensagem em vez de fingir que está sem conexão.
+      if (!isConnectionError(err)) {
+        if (!hasData.current) setError(getErrorMessage(err));
+        return;
+      }
       const cached = hasData.current ? null : await ordersCache.get(userId);
       if (cached) {
         setOrders(cached.orders);
