@@ -104,8 +104,29 @@ agrupados por produto. Sem cardápio hoje: **404** `{ "error": "Nenhum cardápio
 | POST · PUT | `/owner/delivery-fees` · `/:id` | `{ minKm, maxKm, fee }` |
 | DELETE | `/owner/delivery-fees/:id` | Desativa |
 | GET | `/owner/delivery-fees/quote?distanceKm=3.2` | Simula a taxa |
+| GET | `/owner/orders?active=true&limit=20&offset=0` | Pedidos de todos os clientes, mais novos primeiro (`active`: `true` em andamento, `false` finalizados, sem ele todos; `status` opcional) |
+| GET | `/owner/orders/:id` | Pedido completo, com itens, endereço e `customer: { name, phone }` |
+| POST | `/owner/orders/:id/confirm` · `/prepare` · `/ready` · `/cancel` | Muda o status (ver abaixo) |
 
 Erros seguem o padrão do módulo base: `{ "error": "mensagem" }` (e `issues` quando os dados são inválidos).
+
+## Administração de pedidos (item 5)
+
+Ações da proprietária, seguindo o fluxo da seção 11 do escopo:
+
+- **Confirmar:** aguardando confirmação → confirmado
+- **Iniciar preparo:** confirmado → em preparo
+- **Marcar como pronto:** em preparo → pronto
+- **Cancelar:** de aguardando confirmação até pronto
+
+Pular etapa, mexer em pedido finalizado ou cancelar depois de "saiu para entrega" devolve **409** com a
+explicação. A mudança só grava se o pedido ainda estiver no status esperado (duas telas abertas não
+mudam o mesmo pedido duas vezes). O banco confere o fluxo de novo e grava o horário da mudança
+(trigger `trg_orders_before_update`, script 019 do módulo do Cliente). "Saiu para entrega" e "Entregue"
+ficam para as entregas (itens 6 e do Motoboy).
+
+A lista usa a view `vw_customer_orders` (script 020) com o nome e o telefone do cliente; o pedido
+completo reaproveita a leitura do módulo do Cliente. Código em `backend/src/modules/owner-orders/`.
 
 ## Banco de dados
 
@@ -116,8 +137,8 @@ O cardápio do dia também é copiado no MongoDB (coleção `menus`), ver [banco
 
 ```bash
 cd backend
-npm test                   # 83 testes de regra de negócio, sem banco
-npm run test:integration   # 13 testes HTTP → Controller → Service → Repository → MySQL, com login real
+npm test                   # 115 testes de regra de negócio (todos os módulos), sem banco
+npm run test:integration   # 22 testes HTTP → Controller → Service → Repository → MySQL, com login real
 ```
 
 Os testes de integração criam e apagam um banco separado, `marmitaria_test`. O usuário do banco
@@ -135,6 +156,8 @@ Abas da proprietária, no mesmo padrão das abas do Cliente:
   preço especial, retirar item, adicionar variações do catálogo, ativar, encerrar e excluir rascunho.
   `menu-form` cria ou edita nome e dia.
 - **Taxas**: faixas em km e reais, `fee-form` para criar, editar e remover, e simulação da taxa por distância.
+- **Pedidos**: em andamento e finalizados. Tocar abre `order/[id]`: itens, cliente, endereço, pagamento
+  e o botão do próximo passo (confirmar, iniciar preparo, marcar como pronto), além de cancelar.
 - **Conta**: perfil e sair.
 
 As chamadas ficam em `mobile/src/services/owner.service.ts`. As regras continuam no backend: as telas
@@ -143,5 +166,5 @@ mostram a mensagem de erro que a API devolve (ex.: produto já vendido não pode
 ## Próximos passos do módulo
 
 - Cadastro e gestão de motoboys (usa `users` e `sp_create_user` do módulo base)
-- Administração de pedidos e atribuição de entregas (depende de pedidos e entregas)
+- Atribuição de entregas aos motoboys (falta combinar com o módulo do Motoboy quem cria a entrega)
 - Notificações da proprietária

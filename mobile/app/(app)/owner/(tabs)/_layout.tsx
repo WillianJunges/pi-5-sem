@@ -24,6 +24,13 @@ export default function OwnerTabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="orders"
+        options={{
+          title: 'Pedidos',
+          tabBarIcon: ({ focused }) => <TabIcon icon="🧾" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
         name="menus"
         options={{
           title: 'Cardápios',

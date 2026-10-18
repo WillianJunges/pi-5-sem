@@ -1,4 +1,5 @@
 import { api } from './api';
+import type { Order, OrderStatus, OrderSummary } from './orders.service';
 
 /**
  * Chamadas da área da Proprietária (rotas /owner, perfil OWNER).
@@ -105,6 +106,29 @@ export type FeeQuote =
   | { covered: true; distanceKm: number; fee: number; rangeId: string }
   | { covered: false; distanceKm: number };
 
+// ---------- Pedidos (item 5) ----------
+
+/** Quem fez o pedido. */
+export interface OrderCustomer {
+  name: string;
+  phone: string | null;
+}
+
+export type OwnerOrderSummary = OrderSummary & { customer: OrderCustomer };
+export type OwnerOrder = Order & { customer: OrderCustomer };
+
+/** Ações da proprietária e para qual status cada uma leva (escopo, seção 11). */
+export type OwnerOrderAction = 'confirm' | 'prepare' | 'ready' | 'cancel';
+
+/** Próximo passo de cada status (o cancelar aparece à parte, de PENDING até READY). */
+export const NEXT_ACTION: Partial<Record<OrderStatus, { action: OwnerOrderAction; label: string }>> = {
+  PENDING: { action: 'confirm', label: 'Confirmar pedido' },
+  CONFIRMED: { action: 'prepare', label: 'Iniciar preparo' },
+  PREPARING: { action: 'ready', label: 'Marcar como pronto' },
+};
+
+export const CANCELLABLE: OrderStatus[] = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY'];
+
 // ---------- Auxiliares ----------
 
 /** "22,50" / "22.5" / " 22 " → 22.5; texto vazio ou inválido → NaN */
@@ -162,6 +186,17 @@ export const ownerService = {
     setSpecialPrice: (id: string, itemId: string, specialPrice: number | null) =>
       api<unknown>(`/owner/menus/${id}/items/${itemId}`, { method: 'PATCH', body: { specialPrice } }),
     removeItem: (id: string, itemId: string) => api<void>(`/owner/menus/${id}/items/${itemId}`, { method: 'DELETE' }),
+  },
+
+  orders: {
+    /** active: true = em andamento; false = entregues e cancelados. */
+    list: (active: boolean, offset = 0, limit = 20) =>
+      api<{ orders: OwnerOrderSummary[]; hasMore: boolean }>(
+        `/owner/orders?active=${active}&limit=${limit}&offset=${offset}`,
+      ),
+    get: (id: string) => api<OwnerOrder>(`/owner/orders/${id}`),
+    apply: (id: string, action: OwnerOrderAction) =>
+      api<OwnerOrder>(`/owner/orders/${id}/${action}`, { method: 'POST' }),
   },
 
   fees: {
