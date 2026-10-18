@@ -5,7 +5,7 @@ import { Button } from '../../../../src/components/Button';
 import { useAuth } from '../../../../src/contexts/AuthContext';
 import { colors, spacing } from '../../../../src/theme';
 
-/** Aba "Conta": perfil e sair (mesmo padrão da aba Conta do Cliente). */
+/** Aba "Conta": motoboys, perfil e sair (mesmo padrão da aba Conta do Cliente). */
 export default function OwnerAccountScreen() {
   const { user, signOut } = useAuth();
   const [leaving, setLeaving] = useState(false);
@@ -27,8 +27,15 @@ export default function OwnerAccountScreen() {
 
       <View style={styles.card}>
         <Pressable
-          onPress={() => router.push('/profile')}
+          onPress={() => router.push('/owner/couriers')}
           style={({ pressed }) => [styles.item, pressed && { opacity: 0.6 }]}
+        >
+          <Text style={styles.itemText}>Motoboys</Text>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => router.push('/profile')}
+          style={({ pressed }) => [styles.item, styles.divider, pressed && { opacity: 0.6 }]}
         >
           <Text style={styles.itemText}>Meu perfil</Text>
           <Text style={styles.chevron}>›</Text>
@@ -48,6 +55,7 @@ const styles = StyleSheet.create({
   role: { color: colors.primary, fontWeight: '600', marginTop: spacing.xs },
   card: { backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: spacing.md },
   item: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.md },
+  divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   itemText: { fontSize: 16, color: colors.text },
   chevron: { fontSize: 22, color: colors.muted },
 });

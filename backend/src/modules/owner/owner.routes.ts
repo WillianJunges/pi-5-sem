@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { couriersController } from '../couriers/couriers.controller';
 import { deliveryFeesController } from '../delivery-fees/deliveryFees.controller';
 import { menusController } from '../menus/menus.controller';
 import { ownerOrdersController } from '../owner-orders/ownerOrders.controller';
@@ -48,3 +49,10 @@ ownerRoutes.post('/orders/:id/confirm', ownerOrdersController.confirm);
 ownerRoutes.post('/orders/:id/prepare', ownerOrdersController.prepare);
 ownerRoutes.post('/orders/:id/ready', ownerOrdersController.ready);
 ownerRoutes.post('/orders/:id/cancel', ownerOrdersController.cancel);
+
+// Motoboys (escopo, seção 3)
+ownerRoutes.get('/couriers', couriersController.list);
+ownerRoutes.post('/couriers', couriersController.create);
+ownerRoutes.get('/couriers/:id', couriersController.get);
+ownerRoutes.put('/couriers/:id', couriersController.update);
+ownerRoutes.patch('/couriers/:id/active', couriersController.setActive);
