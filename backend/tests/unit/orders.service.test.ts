@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { Address } from '../../src/modules/addresses/address.types';
 import { DeliveryFeesService } from '../../src/modules/delivery-fees/deliveryFees.service';
 import type { MenuItemDetail } from '../../src/modules/menus/menu.types';
-import type { NewOrder, Order, OrderSummary } from '../../src/modules/orders/order.types';
+import type { CancelledBy, NewOrder, Order, OrderStatus, OrderSummary } from '../../src/modules/orders/order.types';
 import type { OrdersRepository } from '../../src/modules/orders/orders.repository';
-import { createOrderSchema, listOrdersSchema } from '../../src/modules/orders/orders.schemas';
+import { cancelOrderSchema, createOrderSchema, listOrdersSchema } from '../../src/modules/orders/orders.schemas';
 import { OrdersService, type TodayMenu } from '../../src/modules/orders/orders.service';
 import { expectAppError } from '../support/expectError';
 import { MemoryDeliveryFeesRepository } from '../support/memoryRepositories';
@@ -51,18 +51,30 @@ function menuItem(variantId: string, standard: number, special: number | null = 
 
 /** Guarda o que seria gravado no MySQL. */
 class MemoryOrdersRepository implements OrdersRepository {
-  saved: (NewOrder & { customerId: string; id: string })[] = [];
+  saved: (NewOrder & {
+    customerId: string;
+    id: string;
+    status: OrderStatus;
+    cancelledBy: CancelledBy | null;
+    cancellationReason: string | null;
+  })[] = [];
   async create(customerId: string, order: NewOrder) {
     const id = `o${this.saved.length + 1}`;
-    this.saved.push({ ...order, customerId, id });
+    this.saved.push({ ...order, customerId, id, status: 'PENDING', cancelledBy: null, cancellationReason: null });
     return id;
+  }
+  /** Mesmo WHERE do MySQL: só do cliente e só se ainda estiver PENDING. */
+  async cancelByCustomer(customerId: string, id: string, reason: string | null) {
+    const o = this.saved.find((s) => s.id === id && s.customerId === customerId && s.status === 'PENDING');
+    if (!o) return false;
+    Object.assign(o, { status: 'CANCELLED', cancelledBy: 'CUSTOMER', cancellationReason: reason });
+    return true;
   }
   async findByCustomer(customerId: string, id: string) {
     const o = this.saved.find((s) => s.id === id && s.customerId === customerId);
     if (!o) return null;
     return {
       ...o,
-      status: 'PENDING',
       items: o.items.map((i, n) => ({ ...i, id: `oi${n}` })),
       createdAt: new Date(),
       confirmedAt: null,
@@ -250,6 +262,61 @@ describe('Pedidos — cálculo e validação', () => {
 
     it.each([{ limit: '0' }, { limit: '51' }, { offset: '-1' }, { limit: 'abc' }])('query inválida %o', (query) => {
       expect(() => listOrdersSchema.parse(query)).toThrow();
+    });
+  });
+
+  describe('cancelamento pelo cliente (POST /orders/:id/cancel)', () => {
+    const cancelBody = (data: unknown) => cancelOrderSchema.parse(data);
+    let id: string;
+
+    beforeEach(async () => {
+      ({ id } = await service.create(CUSTOMER, body({ items: [{ variantId: V1, quantity: 1 }] })));
+    });
+
+    it('cancela pedido PENDING e guarda quem cancelou e o motivo', async () => {
+      const order = await service.cancel(CUSTOMER, id, cancelBody({ reason: '  Pedi errado  ' }));
+      expect(order.status).toBe('CANCELLED');
+      expect(order.cancelledBy).toBe('CUSTOMER');
+      expect(order.cancellationReason).toBe('Pedi errado');
+    });
+
+    it('motivo é opcional (corpo vazio ou só espaços)', async () => {
+      expect(cancelBody(undefined)).toEqual({ reason: null });
+      expect(cancelBody({ reason: '   ' })).toEqual({ reason: null });
+      const order = await service.cancel(CUSTOMER, id, cancelBody(undefined));
+      expect(order.cancellationReason).toBeNull();
+    });
+
+    it('motivo com mais de 200 caracteres é recusado', () => {
+      expect(() => cancelBody({ reason: 'x'.repeat(201) })).toThrow();
+    });
+
+    it('pedido já confirmado pela marmitaria: recusa', async () => {
+      orders.saved[0].status = 'CONFIRMED';
+      await expectAppError(service.cancel(CUSTOMER, id, cancelBody({})), 409, /já confirmou/);
+      expect(orders.saved[0].status).toBe('CONFIRMED');
+    });
+
+    it('cancelar duas vezes: recusa a segunda', async () => {
+      await service.cancel(CUSTOMER, id, cancelBody({}));
+      await expectAppError(service.cancel(CUSTOMER, id, cancelBody({})), 409, /já foi cancelado/);
+    });
+
+    it('pedido de outro cliente: 404, sem cancelar', async () => {
+      await expectAppError(service.cancel('outro-cliente', id, cancelBody({})), 404);
+      expect(orders.saved[0].status).toBe('PENDING');
+    });
+
+    it('proprietária confirma no mesmo instante: recusa sem cancelar', async () => {
+      // a leitura vê PENDING, mas na hora do UPDATE o pedido já está CONFIRMED
+      const read = orders.findByCustomer.bind(orders);
+      orders.findByCustomer = async (c, i) => {
+        const order = await read(c, i);
+        orders.saved[0].status = 'CONFIRMED';
+        return order;
+      };
+      await expectAppError(service.cancel(CUSTOMER, id, cancelBody({})), 409, /acabou de ser atualizado/);
+      expect(orders.saved[0].status).toBe('CONFIRMED');
     });
   });
 

@@ -8,6 +8,7 @@ import { menusRepository } from '../menus/menus.repository';
 import type { NewOrder, Order, OrderQuote, OrderSummary } from './order.types';
 import { type OrdersRepository, ordersRepository } from './orders.repository';
 import {
+  type CancelOrderInput,
   type CreateOrderInput,
   type ListOrdersInput,
   MAX_ITEM_QUANTITY,
@@ -61,6 +62,29 @@ export class OrdersService {
   async list(customerId: string, { limit, offset }: ListOrdersInput): Promise<{ orders: OrderSummary[]; hasMore: boolean }> {
     const rows = await this.orders.listByCustomer(customerId, limit + 1, offset);
     return { orders: rows.slice(0, limit), hasMore: rows.length > limit };
+  }
+
+  /**
+   * Cancelamento pelo cliente (POST /orders/:id/cancel). Escopo, seção 11: só enquanto
+   * o pedido aguarda confirmação (PENDING); depois disso, só a marmitaria cancela.
+   */
+  async cancel(customerId: string, id: string, { reason }: CancelOrderInput): Promise<Order> {
+    const order = await this.get(customerId, id);
+    if (order.status === 'CANCELLED') throw new AppError('Este pedido já foi cancelado.', 409);
+    if (order.status !== 'PENDING') {
+      throw new AppError(
+        'A marmitaria já confirmou este pedido, então ele não pode mais ser cancelado pelo app. Fale com a marmitaria.',
+        409,
+      );
+    }
+    const changed = await this.orders.cancelByCustomer(customerId, id, reason);
+    // A proprietária confirmou (ou cancelou) entre a leitura e a gravação.
+    if (!changed) throw new AppError('O pedido acabou de ser atualizado pela marmitaria. Confira o status.', 409);
+
+    // INTEGRAÇÃO [Lucas · Proprietária] Notificar "Pedido cancelado pelo cliente" (escopo,
+    //   seção 22, item 8 do Lucas). O pedido já fica com cancelled_by = 'CUSTOMER' e o
+    //   motivo em cancellation_reason, e os dois aparecem em GET /owner/orders/:id.
+    return this.get(customerId, id);
   }
 
   /**

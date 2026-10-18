@@ -47,6 +47,20 @@ export const quoteOrderSchema = createOrderSchema.pick({ addressId: true, items:
 
 export type QuoteOrderInput = z.infer<typeof quoteOrderSchema>;
 
+/** Corpo de POST /orders/:id/cancel: o motivo é opcional (corpo vazio também vale). */
+export const cancelOrderSchema = z
+  .object({
+    reason: z
+      .string()
+      .trim()
+      .max(200, 'Motivo deve ter no máximo 200 caracteres')
+      .nullish()
+      .transform((v) => v || null),
+  })
+  .default({ reason: null });
+
+export type CancelOrderInput = z.infer<typeof cancelOrderSchema>;
+
 /** Query de GET /orders: página do histórico (mais novos primeiro). */
 export const listOrdersSchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),

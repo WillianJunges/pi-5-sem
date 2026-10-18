@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { fromCents } from '../../shared/utils/money';
 import { idParam } from '../../shared/utils/params';
 import type { Order, OrderQuote, OrderSummary } from './order.types';
-import { createOrderSchema, listOrdersSchema, quoteOrderSchema } from './orders.schemas';
+import { cancelOrderSchema, createOrderSchema, listOrdersSchema, quoteOrderSchema } from './orders.schemas';
 import { ordersService } from './orders.service';
 
 /** Pedido como o app recebe: valores em reais, sem o id do cliente. */
@@ -60,6 +60,12 @@ export const ordersController = {
   async create(req: Request, res: Response) {
     const input = createOrderSchema.parse(req.body);
     res.status(201).json(toOrderResponse(await ordersService.create(req.user!.id, input)));
+  },
+
+  /** POST /orders/:id/cancel — cancela enquanto aguarda confirmação. Corpo: { reason? } */
+  async cancel(req: Request, res: Response) {
+    const input = cancelOrderSchema.parse(req.body);
+    res.json(toOrderResponse(await ordersService.cancel(req.user!.id, idParam(req), input)));
   },
 
   /** GET /orders/:id — pedido do cliente logado. */

@@ -62,10 +62,16 @@ export interface Order {
   outForDeliveryAt: Date | null;
   deliveredAt: Date | null;
   cancelledAt: Date | null;
+  /** Quem cancelou (null se não foi cancelado). */
+  cancelledBy: CancelledBy | null;
+  /** Motivo opcional informado pelo cliente ao cancelar. */
+  cancellationReason: string | null;
 }
 
+export type CancelledBy = 'CUSTOMER' | 'OWNER';
+
 /** O que o service entrega ao repository para gravar (tudo já calculado e validado). */
-export type NewOrder = Omit<Order, 'id' | 'customerId' | 'status' | 'items' | `${string}At`> & {
+export type NewOrder = Omit<Order, 'id' | 'customerId' | 'status' | 'items' | `${string}At` | 'cancelledBy' | 'cancellationReason'> & {
   items: Omit<OrderItem, 'id'>[];
 };
 

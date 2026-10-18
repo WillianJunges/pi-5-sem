@@ -63,6 +63,10 @@ export interface Order {
   total: number;
   items: OrderItem[];
   createdAt: string;
+  cancelledAt: string | null;
+  /** Quem cancelou: o próprio cliente ou a marmitaria. */
+  cancelledBy: 'CUSTOMER' | 'OWNER' | null;
+  cancellationReason: string | null;
 }
 
 /** Linha do histórico (GET /orders). */
@@ -112,4 +116,7 @@ export const ordersService = {
     api<OrderQuote>('/orders/quote', { method: 'POST', body: data }),
   create: (data: CreateOrderInput) => api<Order>('/orders', { method: 'POST', body: data }),
   get: (id: string) => api<Order>(`/orders/${id}`),
+  /** Só funciona enquanto o pedido aguarda confirmação (PENDING). */
+  cancel: (id: string, reason: string | null) =>
+    api<Order>(`/orders/${id}/cancel`, { method: 'POST', body: { reason } }),
 };
