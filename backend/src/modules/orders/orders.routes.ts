@@ -8,3 +8,4 @@ ordersRoutes.get('/', ordersController.list);
 ordersRoutes.post('/quote', ordersController.quote);
 ordersRoutes.post('/', ordersController.create);
 ordersRoutes.get('/:id', ordersController.get);
+ordersRoutes.post('/:id/cancel', ordersController.cancel);

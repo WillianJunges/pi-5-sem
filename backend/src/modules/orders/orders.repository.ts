@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import type { RowDataPacket } from 'mysql2/promise';
+import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import { db } from '../../config/database';
 import { translateDatabaseError } from '../../shared/errors/databaseErrors';
 import { centsToDecimal, decimalToCents } from '../../shared/utils/money';
-import type { NewOrder, Order, OrderItem, OrderStatus, OrderSummary, PaymentMethod } from './order.types';
+import type { CancelledBy, NewOrder, Order, OrderItem, OrderStatus, OrderSummary, PaymentMethod } from './order.types';
 
 export interface OrdersRepository {
   /** Grava o pedido e os itens numa transação. Devolve o id. */
@@ -12,6 +12,11 @@ export interface OrdersRepository {
   findByCustomer(customerId: string, id: string): Promise<Order | null>;
   /** Histórico do cliente, mais novos primeiro. */
   listByCustomer(customerId: string, limit: number, offset: number): Promise<OrderSummary[]>;
+  /**
+   * Cancela pelo cliente, só se o pedido for dele e ainda estiver PENDING (a proprietária
+   * pode ter confirmado no mesmo instante). Devolve false se nada mudou.
+   */
+  cancelByCustomer(customerId: string, id: string, reason: string | null): Promise<boolean>;
 }
 
 interface OrderSummaryRow extends RowDataPacket {
@@ -58,6 +63,8 @@ interface OrderRow extends RowDataPacket {
   out_for_delivery_at: Date | null;
   delivered_at: Date | null;
   cancelled_at: Date | null;
+  cancelled_by: CancelledBy | null;
+  cancellation_reason: string | null;
 }
 
 interface OrderItemRow extends RowDataPacket {
@@ -118,6 +125,8 @@ function mapOrder(row: OrderRow, items: OrderItem[]): Order {
     outForDeliveryAt: row.out_for_delivery_at,
     deliveredAt: row.delivered_at,
     cancelledAt: row.cancelled_at,
+    cancelledBy: row.cancelled_by,
+    cancellationReason: row.cancellation_reason,
   };
 }
 
@@ -207,6 +216,20 @@ export class MySqlOrdersRepository implements OrdersRepository {
       [customerId, limit, offset],
     );
     return rows.map(mapSummary);
+  }
+
+  /** O trigger trg_orders_before_update (script 019) grava cancelled_at. */
+  async cancelByCustomer(customerId: string, id: string, reason: string | null): Promise<boolean> {
+    try {
+      const [result] = await db.query<ResultSetHeader>(
+        `UPDATE orders SET status = 'CANCELLED', cancelled_by = 'CUSTOMER', cancellation_reason = ?
+          WHERE id = ? AND customer_id = ? AND status = 'PENDING'`,
+        [reason, id, customerId],
+      );
+      return result.affectedRows > 0;
+    } catch (err) {
+      throw translateDatabaseError(err);
+    }
   }
 }
 
