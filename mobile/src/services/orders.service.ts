@@ -63,6 +63,12 @@ export interface Order {
   total: number;
   items: OrderItem[];
   createdAt: string;
+  /** Horário de cada passo do status (null enquanto não aconteceu). */
+  confirmedAt: string | null;
+  preparingAt: string | null;
+  readyAt: string | null;
+  outForDeliveryAt: string | null;
+  deliveredAt: string | null;
   cancelledAt: string | null;
   /** Quem cancelou: o próprio cliente ou a marmitaria. */
   cancelledBy: 'CUSTOMER' | 'OWNER' | null;

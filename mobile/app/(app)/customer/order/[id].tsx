@@ -14,12 +14,55 @@ import { Button } from '../../../../src/components/Button';
 import { EmptyState } from '../../../../src/components/EmptyState';
 import { TextField } from '../../../../src/components/TextField';
 import { addressLine, formatCep } from '../../../../src/services/addresses.service';
-import { ORDER_STATUS_LABEL, type Order, ordersService, PAYMENT_LABEL } from '../../../../src/services/orders.service';
+import { useOrderPolling } from '../../../../src/hooks/useOrderPolling';
+import {
+  ORDER_STATUS_LABEL,
+  type Order,
+  type OrderStatus,
+  ordersService,
+  PAYMENT_LABEL,
+} from '../../../../src/services/orders.service';
 import { colors, spacing } from '../../../../src/theme';
 import { getErrorMessage } from '../../../../src/utils/errors';
 import { formatCurrency } from '../../../../src/utils/format';
 
 const formatTime = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+/** Passos do pedido, na ordem do escopo (seção 11). O cancelamento aparece à parte. */
+const TIMELINE: { status: OrderStatus; label: string; at: (o: Order) => string | null }[] = [
+  { status: 'PENDING', label: 'Pedido enviado', at: (o) => o.createdAt },
+  { status: 'CONFIRMED', label: 'Confirmado pela marmitaria', at: (o) => o.confirmedAt },
+  { status: 'PREPARING', label: 'Em preparo', at: (o) => o.preparingAt },
+  { status: 'READY', label: 'Pronto', at: (o) => o.readyAt },
+  { status: 'OUT_FOR_DELIVERY', label: 'Saiu para entrega', at: (o) => o.outForDeliveryAt },
+  { status: 'DELIVERED', label: 'Entregue', at: (o) => o.deliveredAt },
+];
+
+/** Linha do tempo do status: passos já alcançados em destaque, os próximos acinzentados. */
+function StatusTimeline({ order }: { order: Order }) {
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>Acompanhamento</Text>
+      {TIMELINE.map((step, i) => {
+        const at = step.at(order);
+        const done = at !== null;
+        const last = i === TIMELINE.length - 1;
+        return (
+          <View key={step.status} style={styles.step}>
+            <View style={styles.stepMarker}>
+              <View style={[styles.dot, done ? styles.dotDone : styles.dotPending]} />
+              {!last ? <View style={[styles.stepLine, done && styles.stepLineDone]} /> : null}
+            </View>
+            <View style={styles.stepBody}>
+              <Text style={[styles.stepLabel, !done && styles.stepLabelPending]}>{step.label}</Text>
+              {at ? <Text style={styles.muted}>{formatTime(at)}</Text> : null}
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
 
 function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   return (
@@ -33,7 +76,8 @@ function Row({ label, value, bold }: { label: string; value: string; bold?: bool
 /**
  * Detalhes do pedido. Aberta logo depois do checkout.
  * Enquanto a marmitaria não confirma (PENDING), o cliente pode cancelar (ponto 9).
- * O acompanhamento em tempo real (status e localização do motoboy) entra no ponto 8.
+ * A linha do tempo do status atualiza sozinha a cada ~60s enquanto a tela está aberta
+ * (ponto 8a). O mapa do motoboy em tempo real depende do Socket.IO (ponto 8b, Yuri).
  */
 export default function OrderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -45,13 +89,26 @@ export default function OrderScreen() {
   const [reason, setReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  /** Horário da última leitura do backend, para o aviso discreto "atualizado às...". */
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
   const load = useCallback(async () => {
     try {
       setOrder(await ordersService.get(id));
+      setUpdatedAt(new Date());
       setError(null);
     } catch (err) {
       setError(getErrorMessage(err));
+    }
+  }, [id]);
+
+  /** Atualização em segundo plano: só troca o pedido; um erro de rede é ignorado até o próximo ciclo. */
+  const silentRefresh = useCallback(async () => {
+    try {
+      setOrder(await ordersService.get(id));
+      setUpdatedAt(new Date());
+    } catch {
+      // sem conexão por um instante: mantém o que está na tela e tenta no próximo ciclo
     }
   }, [id]);
 
@@ -79,6 +136,10 @@ export default function OrderScreen() {
     await load();
     setRefreshing(false);
   }
+
+  // pergunta ao backend a cada ~60s enquanto o pedido não terminou (ponto 8a)
+  const stillOpen = order !== null && order.status !== 'DELIVERED' && order.status !== 'CANCELLED';
+  useOrderPolling(silentRefresh, stillOpen);
 
   if (error && !order) {
     return (
@@ -125,6 +186,8 @@ export default function OrderScreen() {
             {order.cancellationReason ? <Text style={styles.muted}>Motivo: {order.cancellationReason}</Text> : null}
           </View>
         ) : null}
+
+        <StatusTimeline order={order} />
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Itens</Text>
@@ -203,7 +266,12 @@ export default function OrderScreen() {
         {/* erro de quando o pedido mudou de status enquanto o cliente tentava cancelar */}
         {order.status !== 'PENDING' && cancelError ? <Text style={styles.error}>{cancelError}</Text> : null}
 
-        {!finished ? <Text style={[styles.muted, styles.centerText]}>Puxe para baixo para atualizar o status.</Text> : null}
+        {updatedAt ? (
+        <Text style={[styles.muted, styles.centerText]}>
+          Atualizado às {formatTime(updatedAt.toISOString())}
+          {!finished ? ' · atualiza sozinho e ao puxar para baixo' : ''}
+        </Text>
+      ) : null}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -234,5 +302,15 @@ const styles = StyleSheet.create({
   centerText: { textAlign: 'center' },
   error: { fontSize: 14, color: colors.danger },
   cancelledCard: { borderLeftWidth: 4, borderLeftColor: colors.danger },
+  step: { flexDirection: 'row', gap: spacing.sm },
+  stepMarker: { alignItems: 'center', width: 16 },
+  dot: { width: 12, height: 12, borderRadius: 6, marginTop: 3 },
+  dotDone: { backgroundColor: colors.primary },
+  dotPending: { backgroundColor: colors.border },
+  stepLine: { flex: 1, width: 2, backgroundColor: colors.border, marginVertical: 2 },
+  stepLineDone: { backgroundColor: colors.primary },
+  stepBody: { flex: 1, paddingBottom: spacing.md },
+  stepLabel: { fontSize: 15, color: colors.text, fontWeight: '600' },
+  stepLabelPending: { color: colors.muted, fontWeight: '400' },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: spacing.xs },
 });
