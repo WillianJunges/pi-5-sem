@@ -72,10 +72,6 @@ agrupados por produto. Sem cardápio hoje: **404** `{ "error": "Nenhum cardápio
 
 - `price` do produto = menor preço entre as variações ("a partir de").
 - `variations[].price` = preço que vale (já com o preço especial). `standardPrice` permite mostrar "de R$ 25,00 por R$ 22,90".
-- **Diferença para o mock atual do app do Cliente:** lá `variations` é uma lista de nomes e o preço é único
-  por produto. Pelo escopo, **cada variação tem seu preço**, então `variations` vem como objeto. No app,
-  ao escolher a variação, use `variation.price` como `unitPrice` e guarde o `variantId` no carrinho —
-  o pedido precisa dele (escopo, seção 9: o item do pedido registra produto **e variação**).
 
 ### Para o módulo de pedidos (Cliente)
 
@@ -128,9 +124,24 @@ Os testes de integração criam e apagam um banco separado, `marmitaria_test`. O
 precisa de permissão para isso; se não tiver, rode uma vez como root:
 `CREATE DATABASE marmitaria_test; GRANT ALL ON marmitaria_test.* TO 'marmitaria'@'%';`
 
+## Telas no app (`mobile/app/(app)/owner/`)
+
+Abas da proprietária, no mesmo padrão das abas do Cliente:
+
+- **Produtos**: catálogo por categoria (desativados no fim). Tocar abre `product-form`, onde se edita o
+  produto e cada variação (salvar, ativar/desativar, excluir) e se adicionam variações. "Novo produto"
+  cadastra o produto já com as variações.
+- **Cardápios**: ativo, rascunhos e encerrados. Tocar abre `menu/[id]`: itens agrupados por produto,
+  preço especial, retirar item, adicionar variações do catálogo, ativar, encerrar e excluir rascunho.
+  `menu-form` cria ou edita nome e dia.
+- **Taxas**: faixas em km e reais, `fee-form` para criar, editar e remover, e simulação da taxa por distância.
+- **Conta**: perfil e sair.
+
+As chamadas ficam em `mobile/src/services/owner.service.ts`. As regras continuam no backend: as telas
+mostram a mensagem de erro que a API devolve (ex.: produto já vendido não pode ser excluído).
+
 ## Próximos passos do módulo
 
-- Telas da proprietária no app (`mobile/app/(app)/owner/`)
 - Cadastro e gestão de motoboys (usa `users` e `sp_create_user` do módulo base)
 - Administração de pedidos e atribuição de entregas (depende de pedidos e entregas)
 - Notificações da proprietária
