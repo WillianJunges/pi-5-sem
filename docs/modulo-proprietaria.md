@@ -107,6 +107,10 @@ agrupados por produto. Sem cardápio hoje: **404** `{ "error": "Nenhum cardápio
 | GET | `/owner/orders?active=true&limit=20&offset=0` | Pedidos de todos os clientes, mais novos primeiro (`active`: `true` em andamento, `false` finalizados, sem ele todos; `status` opcional) |
 | GET | `/owner/orders/:id` | Pedido completo, com itens, endereço e `customer: { name, phone }` |
 | POST | `/owner/orders/:id/confirm` · `/prepare` · `/ready` · `/cancel` | Muda o status (ver abaixo) |
+| GET | `/owner/couriers` | Motoboys (ativos e desativados), por nome |
+| POST | `/owner/couriers` | `{ name, email, phone?, password }` — cria a conta com perfil COURIER |
+| GET · PUT | `/owner/couriers/:id` | PUT: `{ name, email, phone? }` |
+| PATCH | `/owner/couriers/:id/active` | `{ active }` — desativar bloqueia o login e encerra as sessões |
 
 Erros seguem o padrão do módulo base: `{ "error": "mensagem" }` (e `issues` quando os dados são inválidos).
 
@@ -128,6 +132,18 @@ ficam para as entregas (itens 6 e do Motoboy).
 A lista usa a view `vw_customer_orders` (script 020) com o nome e o telefone do cliente; o pedido
 completo reaproveita a leitura do módulo do Cliente. Código em `backend/src/modules/owner-orders/`.
 
+## Motoboys (item 4)
+
+Pelo escopo (seção 3), contas de motoboy são criadas pela proprietária: ela informa nome, e-mail,
+telefone e uma senha inicial, e passa os dados ao motoboy. Motoboy **não é excluído**, só desativado
+(preserva o histórico de entregas).
+
+Reaproveita o módulo base: criar usa a procedure `sp_create_user` (perfil `COURIER`), listar usa a view
+`vw_users`, e o trigger de `users` (script 004) grava a auditoria e, ao desativar, revoga os refresh
+tokens. O login de conta desativada é recusado. Um access token já emitido continua válido até expirar
+(15 minutos, `JWT_ACCESS_TTL_SECONDS`). As rotas só alteram usuários com perfil `COURIER`.
+Código em `backend/src/modules/couriers/`.
+
 ## Banco de dados
 
 Scripts `011` a `017` em `database/schema/`. Detalhes em [banco-de-dados.md](banco-de-dados.md).
@@ -138,7 +154,7 @@ O cardápio do dia também é copiado no MongoDB (coleção `menus`), ver [banco
 ```bash
 cd backend
 npm test                   # 115 testes de regra de negócio (todos os módulos), sem banco
-npm run test:integration   # 22 testes HTTP → Controller → Service → Repository → MySQL, com login real
+npm run test:integration   # 33 testes HTTP → Controller → Service → Repository → MySQL, com login real
 ```
 
 Os testes de integração criam e apagam um banco separado, `marmitaria_test`. O usuário do banco
@@ -158,13 +174,12 @@ Abas da proprietária, no mesmo padrão das abas do Cliente:
 - **Taxas**: faixas em km e reais, `fee-form` para criar, editar e remover, e simulação da taxa por distância.
 - **Pedidos**: em andamento e finalizados. Tocar abre `order/[id]`: itens, cliente, endereço, pagamento
   e o botão do próximo passo (confirmar, iniciar preparo, marcar como pronto), além de cancelar.
-- **Conta**: perfil e sair.
+- **Conta**: motoboys (`couriers`, `courier-form`: cadastrar, editar, desativar e reativar), perfil e sair.
 
 As chamadas ficam em `mobile/src/services/owner.service.ts`. As regras continuam no backend: as telas
 mostram a mensagem de erro que a API devolve (ex.: produto já vendido não pode ser excluído).
 
 ## Próximos passos do módulo
 
-- Cadastro e gestão de motoboys (usa `users` e `sp_create_user` do módulo base)
 - Atribuição de entregas aos motoboys (falta combinar com o módulo do Motoboy quem cria a entrega)
 - Notificações da proprietária

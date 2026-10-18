@@ -129,6 +129,25 @@ export const NEXT_ACTION: Partial<Record<OrderStatus, { action: OwnerOrderAction
 
 export const CANCELLABLE: OrderStatus[] = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY'];
 
+// ---------- Motoboys (item 4) ----------
+
+export interface Courier {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  active: boolean;
+  /** Sessões abertas (aparelhos logados). */
+  activeSessions: number;
+  createdAt: string;
+}
+
+export interface CourierInput {
+  name: string;
+  email: string;
+  phone: string | null;
+}
+
 // ---------- Auxiliares ----------
 
 /** "22,50" / "22.5" / " 22 " → 22.5; texto vazio ou inválido → NaN */
@@ -197,6 +216,16 @@ export const ownerService = {
     get: (id: string) => api<OwnerOrder>(`/owner/orders/${id}`),
     apply: (id: string, action: OwnerOrderAction) =>
       api<OwnerOrder>(`/owner/orders/${id}/${action}`, { method: 'POST' }),
+  },
+
+  couriers: {
+    list: () => api<Courier[]>('/owner/couriers'),
+    get: (id: string) => api<Courier>(`/owner/couriers/${id}`),
+    create: (data: CourierInput & { password: string }) =>
+      api<Courier>('/owner/couriers', { method: 'POST', body: data }),
+    update: (id: string, data: CourierInput) => api<Courier>(`/owner/couriers/${id}`, { method: 'PUT', body: data }),
+    setActive: (id: string, active: boolean) =>
+      api<Courier>(`/owner/couriers/${id}/active`, { method: 'PATCH', body: { active } }),
   },
 
   fees: {

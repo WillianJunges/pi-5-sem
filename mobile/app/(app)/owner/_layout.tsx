@@ -7,6 +7,8 @@ import { Stack } from 'expo-router';
  *   menu-form     → cadastro/edição de cardápio (?id= para editar)
  *   menu/[id]     → itens do cardápio, preço especial, ativar e encerrar
  *   order/[id]    → pedido: itens, cliente, confirmar, preparo, pronto e cancelar
+ *   couriers      → motoboys (pela aba Conta)
+ *   courier-form  → cadastro/edição de motoboy (?id= para editar)
  *   fee-form      → cadastro/edição de faixa de taxa (?id= para editar)
  */
 export default function OwnerLayout() {
@@ -17,6 +19,8 @@ export default function OwnerLayout() {
       <Stack.Screen name="menu-form" options={{ title: 'Cardápio' }} />
       <Stack.Screen name="menu/[id]" options={{ title: 'Cardápio' }} />
       <Stack.Screen name="order/[id]" options={{ title: 'Pedido' }} />
+      <Stack.Screen name="couriers" options={{ title: 'Motoboys' }} />
+      <Stack.Screen name="courier-form" options={{ title: 'Motoboy' }} />
       <Stack.Screen name="fee-form" options={{ title: 'Faixa de taxa' }} />
     </Stack>
   );
