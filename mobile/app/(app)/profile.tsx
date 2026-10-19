@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../../src/components/Button';
 import { useAuth } from '../../src/contexts/AuthContext';
 import type { Role } from '../../src/services/auth.service';
@@ -26,9 +26,18 @@ export default function ProfileScreen() {
 
   if (!user) return null;
 
-  async function handleSignOut() {
-    setLeaving(true);
-    await signOut();
+  function handleSignOut() {
+    Alert.alert('Sair da conta', 'Tem certeza que deseja sair?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Sair',
+        style: 'destructive',
+        onPress: async () => {
+          setLeaving(true);
+          await signOut();
+        },
+      },
+    ]);
   }
 
   return (

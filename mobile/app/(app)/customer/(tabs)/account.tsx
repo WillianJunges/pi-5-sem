@@ -1,6 +1,6 @@
 import { type Href, router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../../../../src/components/Button';
 import { useAuth } from '../../../../src/contexts/AuthContext';
 import { colors, spacing } from '../../../../src/theme';
@@ -17,9 +17,18 @@ export default function AccountScreen() {
 
   if (!user) return null;
 
-  async function handleSignOut() {
-    setLeaving(true);
-    await signOut();
+  function handleSignOut() {
+    Alert.alert('Sair da conta', 'Tem certeza que deseja sair?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Sair',
+        style: 'destructive',
+        onPress: async () => {
+          setLeaving(true);
+          await signOut();
+        },
+      },
+    ]);
   }
 
   return (
