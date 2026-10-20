@@ -3,7 +3,16 @@ import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import { db } from '../../config/database';
 import { translateDatabaseError } from '../../shared/errors/databaseErrors';
 import { centsToDecimal, decimalToCents } from '../../shared/utils/money';
-import type { CancelledBy, NewOrder, Order, OrderItem, OrderStatus, OrderSummary, PaymentMethod } from './order.types';
+import type {
+  CancelledBy,
+  Fulfillment,
+  NewOrder,
+  Order,
+  OrderItem,
+  OrderStatus,
+  OrderSummary,
+  PaymentMethod,
+} from './order.types';
 
 export interface OrdersRepository {
   /** Grava o pedido e os itens numa transação. Devolve o id. */
@@ -22,11 +31,12 @@ export interface OrdersRepository {
 interface OrderSummaryRow extends RowDataPacket {
   id: string;
   status: OrderStatus;
+  fulfillment: Fulfillment;
   is_active: number;
   payment_method: PaymentMethod;
   address_label: string | null;
-  address_street: string;
-  address_number: string;
+  address_street: string | null;
+  address_number: string | null;
   total: string;
   item_count: string | number;
   items_summary: string;
@@ -38,10 +48,12 @@ interface OrderRow extends RowDataPacket {
   customer_id: string;
   menu_id: string;
   status: OrderStatus;
+  fulfillment: Fulfillment;
   payment_method: PaymentMethod;
   change_for: string | null;
   notes: string | null;
-  address_id: string;
+  /** Colunas address_* e distance_meters ficam NULL na retirada no local (script 022). */
+  address_id: string | null;
   address_label: string | null;
   address_cep: string;
   address_street: string;
@@ -52,7 +64,7 @@ interface OrderRow extends RowDataPacket {
   address_state: string;
   address_latitude: string;
   address_longitude: string;
-  distance_meters: number;
+  distance_meters: number | null;
   subtotal: string;
   delivery_fee: string;
   total: string;
@@ -97,10 +109,11 @@ function mapOrder(row: OrderRow, items: OrderItem[]): Order {
     customerId: row.customer_id,
     menuId: row.menu_id,
     status: row.status,
+    fulfillment: row.fulfillment,
     paymentMethod: row.payment_method,
     changeForCents: row.change_for === null ? null : decimalToCents(row.change_for),
     notes: row.notes,
-    address: {
+    address: row.address_id === null ? null : {
       addressId: row.address_id,
       label: row.address_label,
       cep: row.address_cep,
@@ -139,29 +152,31 @@ export class MySqlOrdersRepository implements OrdersRepository {
       const a = order.address;
       await conn.query(
         `INSERT INTO orders
-           (id, customer_id, menu_id, payment_method, change_for, notes,
+           (id, customer_id, menu_id, fulfillment, payment_method, change_for, notes,
             address_id, address_label, address_cep, address_street, address_number, address_complement,
             address_district, address_city, address_state, address_latitude, address_longitude,
             distance_meters, subtotal, delivery_fee, total)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           customerId,
           order.menuId,
+          order.fulfillment,
           order.paymentMethod,
           order.changeForCents === null ? null : centsToDecimal(order.changeForCents),
           order.notes,
-          a.addressId,
-          a.label,
-          a.cep,
-          a.street,
-          a.number,
-          a.complement,
-          a.district,
-          a.city,
-          a.state,
-          a.latitude,
-          a.longitude,
+          // retirada no local: sem endereço (tudo NULL)
+          a?.addressId ?? null,
+          a?.label ?? null,
+          a?.cep ?? null,
+          a?.street ?? null,
+          a?.number ?? null,
+          a?.complement ?? null,
+          a?.district ?? null,
+          a?.city ?? null,
+          a?.state ?? null,
+          a?.latitude ?? null,
+          a?.longitude ?? null,
           order.distanceMeters,
           centsToDecimal(order.subtotalCents),
           centsToDecimal(order.deliveryFeeCents),
@@ -237,6 +252,7 @@ export function mapSummary(row: OrderSummaryRow): OrderSummary {
   return {
     id: row.id,
     status: row.status,
+    fulfillment: row.fulfillment,
     isActive: Boolean(row.is_active),
     paymentMethod: row.payment_method,
     addressLabel: row.address_label,

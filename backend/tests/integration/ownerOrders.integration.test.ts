@@ -112,6 +112,22 @@ async function createOrder(status = 'PENDING') {
   return id;
 }
 
+/** Pedido de retirada no local (script 022): sem endereço, sem distância e sem taxa. */
+async function createPickupOrder(status = 'PENDING') {
+  const id = randomUUID();
+  await admin.query(
+    `INSERT INTO orders (id, customer_id, menu_id, status, fulfillment, payment_method, subtotal, delivery_fee, total)
+     VALUES (?, ?, ?, ?, 'PICKUP', 'PIX', 44, 0, 44)`,
+    [id, customerId, menuId, status],
+  );
+  await admin.query(
+    `INSERT INTO order_items (id, order_id, product_id, variant_id, product_name, variant_name, quantity, unit_price, subtotal)
+     SELECT ?, ?, product_id, id, 'Marmita de Frango', name, 2, 22, 44 FROM product_variants WHERE id = ?`,
+    [randomUUID(), id, variantId],
+  );
+  return id;
+}
+
 const statusOf = async (id: string) => {
   const [[row]] = await admin.query<mysql.RowDataPacket[]>('SELECT status, confirmed_at FROM orders WHERE id = ?', [id]);
   return row;
@@ -203,5 +219,68 @@ describe('Pedidos da proprietária (/owner/orders)', () => {
     expect((await request(app).get('/owner/orders').set(customer)).status).toBe(403);
     expect((await request(app).post(`/owner/orders/${id}/confirm`).set(customer)).status).toBe(403);
     expect((await request(app).get('/owner/orders')).status).toBe(401);
+  });
+
+  describe('retirada no local', () => {
+    it('mostra o pedido sem endereço e sem taxa', async () => {
+      const id = await createPickupOrder();
+      const res = await request(app).get(`/owner/orders/${id}`).set(owner);
+      expect(res.body).toMatchObject({ fulfillment: 'PICKUP', address: null, distanceMeters: null, deliveryFee: 0, total: 44 });
+      const lista = await request(app).get('/owner/orders?active=true').set(owner);
+      expect(lista.body.orders[0]).toMatchObject({ fulfillment: 'PICKUP', addressStreet: null });
+    });
+
+    it('marca como retirado (READY → DELIVERED) e o pedido vai para os finalizados', async () => {
+      const id = await createPickupOrder('READY');
+      const res = await request(app).post(`/owner/orders/${id}/pickup`).set(owner);
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('DELIVERED');
+      expect(res.body.deliveredAt).not.toBeNull();
+      const finalizados = await request(app).get('/owner/orders?active=false').set(owner);
+      expect(finalizados.body.orders.map((o: { id: string }) => o.id)).toEqual([id]);
+    });
+
+    it('recusa marcar como retirado antes de ficar pronto', async () => {
+      const id = await createPickupOrder('PREPARING');
+      expect((await request(app).post(`/owner/orders/${id}/pickup`).set(owner)).status).toBe(409);
+      expect((await statusOf(id)).status).toBe('PREPARING');
+    });
+
+    it('pedido de entrega não pode ser marcado como retirado', async () => {
+      const id = await createOrder('READY');
+      const res = await request(app).post(`/owner/orders/${id}/pickup`).set(owner);
+      expect(res.status).toBe(409);
+      expect(res.body.error).toMatch(/entrega/);
+      expect((await statusOf(id)).status).toBe('READY');
+    });
+
+    it('o banco recusa retirada saindo para entrega e entrega pulando a saída', async () => {
+      const retirada = await createPickupOrder('READY');
+      await expect(admin.query("UPDATE orders SET status = 'OUT_FOR_DELIVERY' WHERE id = ?", [retirada])).rejects.toThrow(
+        /retirada/,
+      );
+      const entrega = await createOrder('READY');
+      await expect(admin.query("UPDATE orders SET status = 'DELIVERED' WHERE id = ?", [entrega])).rejects.toThrow(
+        /sair para entrega/,
+      );
+      await expect(admin.query("UPDATE orders SET fulfillment = 'PICKUP' WHERE id = ?", [entrega])).rejects.toThrow();
+    });
+
+    it('o banco recusa retirada com taxa ou entrega sem endereço', async () => {
+      await expect(
+        admin.query(
+          `INSERT INTO orders (id, customer_id, menu_id, fulfillment, payment_method, subtotal, delivery_fee, total)
+           VALUES (?, ?, ?, 'PICKUP', 'PIX', 44, 6, 50)`,
+          [randomUUID(), customerId, menuId],
+        ),
+      ).rejects.toThrow(/chk_orders_fulfillment/);
+      await expect(
+        admin.query(
+          `INSERT INTO orders (id, customer_id, menu_id, fulfillment, payment_method, subtotal, delivery_fee, total)
+           VALUES (?, ?, ?, 'DELIVERY', 'PIX', 44, 0, 44)`,
+          [randomUUID(), customerId, menuId],
+        ),
+      ).rejects.toThrow(/chk_orders_fulfillment/);
+    });
   });
 });

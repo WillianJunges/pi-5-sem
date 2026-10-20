@@ -106,7 +106,7 @@ agrupados por produto. Sem cardápio hoje: **404** `{ "error": "Nenhum cardápio
 | GET | `/owner/delivery-fees/quote?distanceKm=3.2` | Simula a taxa |
 | GET | `/owner/orders?active=true&limit=20&offset=0` | Pedidos de todos os clientes, mais novos primeiro (`active`: `true` em andamento, `false` finalizados, sem ele todos; `status` opcional) |
 | GET | `/owner/orders/:id` | Pedido completo, com itens, endereço e `customer: { name, phone }` |
-| POST | `/owner/orders/:id/confirm` · `/prepare` · `/ready` · `/cancel` | Muda o status (ver abaixo) |
+| POST | `/owner/orders/:id/confirm` · `/prepare` · `/ready` · `/pickup` · `/cancel` | Muda o status (ver abaixo) |
 | GET | `/owner/couriers` | Motoboys (ativos e desativados), por nome |
 | POST | `/owner/couriers` | `{ name, email, phone?, password }` — cria a conta com perfil COURIER |
 | GET · PUT | `/owner/couriers/:id` | PUT: `{ name, email, phone? }` |
@@ -121,6 +121,7 @@ Ações da proprietária, seguindo o fluxo da seção 11 do escopo:
 - **Confirmar:** aguardando confirmação → confirmado
 - **Iniciar preparo:** confirmado → em preparo
 - **Marcar como pronto:** em preparo → pronto
+- **Marcar como retirado:** pronto → entregue, só em pedido de **retirada no local** (ver abaixo)
 - **Cancelar:** de aguardando confirmação até pronto
 
 Pular etapa, mexer em pedido finalizado ou cancelar depois de "saiu para entrega" devolve **409** com a
@@ -128,6 +129,12 @@ explicação. A mudança só grava se o pedido ainda estiver no status esperado 
 mudam o mesmo pedido duas vezes). O banco confere o fluxo de novo e grava o horário da mudança
 (trigger `trg_orders_before_update`, script 019 do módulo do Cliente). "Saiu para entrega" e "Entregue"
 ficam para as entregas (itens 6 e do Motoboy).
+
+**Retirada no local** (módulo do Cliente, script 022): o cliente pode escolher buscar o pedido na
+marmitaria. Esse pedido vem com `fulfillment: "PICKUP"`, `address: null`, `distanceMeters: null` e
+taxa zero, não gera entrega e não passa por "saiu para entrega": quando o cliente busca, a proprietária
+usa **Marcar como retirado** (`POST /owner/orders/:id/pickup`, pronto → entregue). Em pedido de entrega
+essa ação devolve 409, e o banco recusa os dois atalhos (trigger `trg_orders_fulfillment`).
 
 A lista usa a view `vw_customer_orders` (script 020) com o nome e o telefone do cliente; o pedido
 completo reaproveita a leitura do módulo do Cliente. Código em `backend/src/modules/owner-orders/`.

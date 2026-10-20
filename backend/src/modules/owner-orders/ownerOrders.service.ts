@@ -17,12 +17,14 @@ const ACTION_VERB: Record<OwnerAction, string> = {
   confirm: 'confirmar',
   prepare: 'iniciar o preparo de',
   ready: 'marcar como pronto',
+  pickup: 'marcar como retirado',
   cancel: 'cancelar',
 };
 
 /**
  * Administração de pedidos pela proprietária (item 5): consultar, confirmar, iniciar
- * preparo, marcar como pronto e cancelar (escopo, seção 11).
+ * preparo, marcar como pronto e cancelar (escopo, seção 11). Na retirada no local,
+ * também marcar como retirado.
  */
 export class OwnerOrdersService {
   constructor(private readonly orders: OwnerOrdersRepository) {}
@@ -42,7 +44,10 @@ export class OwnerOrdersService {
   /** Aplica uma ação; recusa com mensagem clara se o pedido não está no estado certo. */
   async apply(id: string, action: OwnerAction): Promise<OwnerOrder> {
     const order = await this.get(id);
-    const { from, to } = ACTION_FLOW[action];
+    const { from, to, only } = ACTION_FLOW[action];
+    if (only === 'PICKUP' && order.fulfillment !== 'PICKUP') {
+      throw new AppError('Este pedido é para entrega: quem marca como entregue é o motoboy.', 409);
+    }
     if (!from.includes(order.status)) {
       throw new AppError(
         `Não é possível ${ACTION_VERB[action]} um pedido ${STATUS_LABEL[order.status]}.`,

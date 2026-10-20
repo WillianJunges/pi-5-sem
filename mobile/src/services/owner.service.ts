@@ -118,7 +118,7 @@ export type OwnerOrderSummary = OrderSummary & { customer: OrderCustomer };
 export type OwnerOrder = Order & { customer: OrderCustomer };
 
 /** Ações da proprietária e para qual status cada uma leva (escopo, seção 11). */
-export type OwnerOrderAction = 'confirm' | 'prepare' | 'ready' | 'cancel';
+export type OwnerOrderAction = 'confirm' | 'prepare' | 'ready' | 'pickup' | 'cancel';
 
 /** Próximo passo de cada status (o cancelar aparece à parte, de PENDING até READY). */
 export const NEXT_ACTION: Partial<Record<OrderStatus, { action: OwnerOrderAction; label: string }>> = {
@@ -126,6 +126,9 @@ export const NEXT_ACTION: Partial<Record<OrderStatus, { action: OwnerOrderAction
   CONFIRMED: { action: 'prepare', label: 'Iniciar preparo' },
   PREPARING: { action: 'ready', label: 'Marcar como pronto' },
 };
+
+/** Na retirada no local não há motoboy: a proprietária marca quando o cliente busca. */
+export const PICKUP_ACTION = { action: 'pickup', label: 'Marcar como retirado' } as const;
 
 export const CANCELLABLE: OrderStatus[] = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY'];
 

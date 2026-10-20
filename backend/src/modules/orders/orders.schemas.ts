@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { reaisSchema } from '../../shared/utils/money';
-import { PAYMENT_METHODS } from './order.types';
+import { FULFILLMENT_TYPES, PAYMENT_METHODS } from './order.types';
 
 /** Maior quantidade de um mesmo item num pedido (limite de bom senso). */
 export const MAX_ITEM_QUANTITY = 50;
@@ -9,8 +9,11 @@ export const MAX_ITEM_QUANTITY = 50;
  * Corpo de POST /orders. O app manda só O QUE o cliente quer (variação + quantidade);
  * preços, taxa e total são calculados no backend (escopo, seção 10).
  */
-export const createOrderSchema = z.object({
-  addressId: z.uuid('Endereço inválido'),
+const orderBodySchema = z.object({
+  /** Entrega (padrão) ou retirada no local. */
+  fulfillment: z.enum(FULFILLMENT_TYPES, 'Escolha entrega ou retirada no local').default('DELIVERY'),
+  /** Obrigatório na entrega; na retirada é ignorado. */
+  addressId: z.uuid('Endereço inválido').nullish(),
   paymentMethod: z.enum(PAYMENT_METHODS, 'Forma de pagamento inválida'),
   /** Troco para quanto (só dinheiro). Em reais; vira centavos. */
   changeFor: reaisSchema('Troco').nullish().transform((v) => v ?? null),
@@ -40,10 +43,26 @@ export const createOrderSchema = z.object({
   expectedTotal: reaisSchema('Total').optional(),
 });
 
+/** Entrega precisa de endereço; na retirada o endereço enviado é descartado. */
+function withAddressRule<T extends { fulfillment: string; addressId?: string | null }>(data: T, ctx: z.RefinementCtx) {
+  if (data.fulfillment === 'DELIVERY' && !data.addressId) {
+    ctx.addIssue({ code: 'custom', path: ['addressId'], message: 'Escolha um endereço de entrega' });
+  }
+}
+const dropPickupAddress = <T extends { fulfillment: string; addressId?: string | null }>(data: T) => ({
+  ...data,
+  addressId: data.fulfillment === 'PICKUP' ? null : (data.addressId ?? null),
+});
+
+export const createOrderSchema = orderBodySchema.superRefine(withAddressRule).transform(dropPickupAddress);
+
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 
 /** Corpo de POST /orders/quote: prévia dos valores, sem gravar nada. */
-export const quoteOrderSchema = createOrderSchema.pick({ addressId: true, items: true });
+export const quoteOrderSchema = orderBodySchema
+  .pick({ fulfillment: true, addressId: true, items: true })
+  .superRefine(withAddressRule)
+  .transform(dropPickupAddress);
 
 export type QuoteOrderInput = z.infer<typeof quoteOrderSchema>;
 
