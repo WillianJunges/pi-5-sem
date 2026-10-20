@@ -17,10 +17,12 @@ import { TextField } from '../../../src/components/TextField';
 import { useCart } from '../../../src/contexts/CartContext';
 import { type Address, addressesService, addressLine } from '../../../src/services/addresses.service';
 import {
+  type Fulfillment,
   type OrderQuote,
   ordersService,
   PAYMENT_LABEL,
   type PaymentMethod,
+  STORE_PICKUP_ADDRESS,
 } from '../../../src/services/orders.service';
 import { colors, spacing } from '../../../src/theme';
 import { getErrorMessage } from '../../../src/utils/errors';
@@ -47,7 +49,8 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 /**
- * Finalizar pedido: revisar itens, escolher endereço e forma de pagamento (na entrega).
+ * Finalizar pedido: revisar itens, escolher entrega (com endereço) ou retirada no local
+ * (sem taxa) e a forma de pagamento (na entrega ou no balcão).
  * O app só envia variação + quantidade; preços, taxa e total vêm do backend.
  */
 export default function CheckoutScreen() {
@@ -58,6 +61,7 @@ export default function CheckoutScreen() {
   const [quoting, setQuoting] = useState(false);
   const [priceChanges, setPriceChanges] = useState<string[]>([]);
   const [quoteRequest, setQuoteRequest] = useState(0);
+  const [fulfillment, setFulfillment] = useState<Fulfillment>('DELIVERY');
   const [addressId, setAddressId] = useState<string | null>(null);
   const [payment, setPayment] = useState<PaymentMethod>('PIX');
   const [needsChange, setNeedsChange] = useState(false);
@@ -82,17 +86,26 @@ export default function CheckoutScreen() {
     }, []),
   );
 
-  // o que muda a prévia: endereço e variação/quantidade (não o preço, que vem do backend)
+  const pickup = fulfillment === 'PICKUP';
+
+  // o que muda a prévia: entrega/retirada, endereço e variação/quantidade (não o preço, que vem do backend)
   const cartKey = items.map((i) => `${i.variantId}:${i.quantity}`).join(',');
 
   // prévia (POST /orders/quote): preços de hoje, distância, taxa e total calculados no backend
   useEffect(() => {
-    if (!addressId || items.length === 0) return;
+    if ((!pickup && !addressId) || items.length === 0) {
+      setQuote(null); // ex.: voltou da retirada para a entrega sem endereço cadastrado
+      return;
+    }
     let stale = false;
     setQuoting(true);
     setQuoteError(null);
     ordersService
-      .quote({ addressId, items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })) })
+      .quote({
+        fulfillment,
+        addressId: pickup ? null : addressId,
+        items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })),
+      })
       .then(async (result) => {
         if (stale) return;
         setQuote(result);
@@ -124,8 +137,8 @@ export default function CheckoutScreen() {
     return () => {
       stale = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recalcula só quando endereço ou itens mudam
-  }, [addressId, cartKey, quoteRequest]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recalcula só quando entrega/retirada, endereço ou itens mudam
+  }, [fulfillment, addressId, cartKey, quoteRequest]);
 
   if (items.length === 0) {
     return (
@@ -137,7 +150,7 @@ export default function CheckoutScreen() {
 
   async function handleConfirm() {
     setError(null);
-    if (!addressId) {
+    if (!pickup && !addressId) {
       setError('Escolha um endereço de entrega.');
       return;
     }
@@ -154,7 +167,8 @@ export default function CheckoutScreen() {
     setSubmitting(true);
     try {
       const order = await ordersService.create({
-        addressId,
+        fulfillment,
+        addressId: pickup ? null : addressId,
         paymentMethod: payment,
         changeFor: change,
         notes: notes.trim() || null,
@@ -173,45 +187,76 @@ export default function CheckoutScreen() {
   }
 
   const unavailable = items.filter((i) => quote?.unavailableVariantIds.includes(i.variantId));
-  const canConfirm = !!addressId && !!quote && !quoting && unavailable.length === 0;
+  const canConfirm = (pickup || !!addressId) && !!quote && !quoting && unavailable.length === 0;
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <Section title="Endereço de entrega">
-          {addresses === null ? (
-            <ActivityIndicator color={colors.primary} />
-          ) : addresses.length === 0 ? (
-            <Button title="Cadastrar endereço" variant="outline" onPress={() => router.push('/customer/address-form')} />
-          ) : (
-            <>
-              {addresses.map((a) => (
-                <Pressable
-                  key={a.id}
-                  onPress={() => setAddressId(a.id)}
-                  style={[styles.option, a.id === addressId && styles.optionSelected]}
-                >
-                  <Radio selected={a.id === addressId} />
-                  <View style={styles.flex}>
-                    <Text style={styles.optionTitle}>{a.label ?? 'Endereço'}</Text>
-                    <Text style={styles.optionText}>{addressLine(a)}</Text>
-                    <Text style={styles.muted}>
-                      {a.district} · {a.city}/{a.state}
-                    </Text>
-                    {a.latitude === null ? (
-                      <Text style={styles.warning}>Não localizado no mapa: edite o endereço antes de pedir.</Text>
-                    ) : null}
-                  </View>
-                </Pressable>
-              ))}
-              <Pressable onPress={() => router.push('/customer/addresses')} hitSlop={8}>
-                <Text style={styles.link}>Gerenciar endereços</Text>
-              </Pressable>
-            </>
-          )}
+        <Section title="Como você quer receber?">
+          {(
+            [
+              { value: 'DELIVERY', title: 'Entrega', text: 'No seu endereço, com taxa pela distância' },
+              { value: 'PICKUP', title: 'Retirar no local', text: 'Você busca na marmitaria, sem taxa' },
+            ] as const
+          ).map((option) => (
+            <Pressable
+              key={option.value}
+              onPress={() => setFulfillment(option.value)}
+              style={[styles.option, option.value === fulfillment && styles.optionSelected]}
+            >
+              <Radio selected={option.value === fulfillment} />
+              <View style={styles.flex}>
+                <Text style={styles.optionTitle}>{option.title}</Text>
+                <Text style={styles.muted}>{option.text}</Text>
+              </View>
+            </Pressable>
+          ))}
         </Section>
 
-        <Section title="Pagamento na entrega">
+        {pickup ? (
+          <Section title="Retirar em">
+            <View style={styles.notice}>
+              <Text style={styles.optionTitle}>{STORE_PICKUP_ADDRESS.name}</Text>
+              <Text style={styles.optionText}>{STORE_PICKUP_ADDRESS.line}</Text>
+              <Text style={styles.muted}>Acompanhe pela tela do pedido: ele aparece como "Pronto para retirada" quando puder buscar.</Text>
+            </View>
+          </Section>
+        ) : (
+          <Section title="Endereço de entrega">
+            {addresses === null ? (
+              <ActivityIndicator color={colors.primary} />
+            ) : addresses.length === 0 ? (
+              <Button title="Cadastrar endereço" variant="outline" onPress={() => router.push('/customer/address-form')} />
+            ) : (
+              <>
+                {addresses.map((a) => (
+                  <Pressable
+                    key={a.id}
+                    onPress={() => setAddressId(a.id)}
+                    style={[styles.option, a.id === addressId && styles.optionSelected]}
+                  >
+                    <Radio selected={a.id === addressId} />
+                    <View style={styles.flex}>
+                      <Text style={styles.optionTitle}>{a.label ?? 'Endereço'}</Text>
+                      <Text style={styles.optionText}>{addressLine(a)}</Text>
+                      <Text style={styles.muted}>
+                        {a.district} · {a.city}/{a.state}
+                      </Text>
+                      {a.latitude === null ? (
+                        <Text style={styles.warning}>Não localizado no mapa: edite o endereço antes de pedir.</Text>
+                      ) : null}
+                    </View>
+                  </Pressable>
+                ))}
+                <Pressable onPress={() => router.push('/customer/addresses')} hitSlop={8}>
+                  <Text style={styles.link}>Gerenciar endereços</Text>
+                </Pressable>
+              </>
+            )}
+          </Section>
+        )}
+
+        <Section title={pickup ? 'Pagamento na retirada' : 'Pagamento na entrega'}>
           {PAYMENT_METHODS.map((method) => (
             <Pressable
               key={method}
@@ -302,13 +347,15 @@ export default function CheckoutScreen() {
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.optionText}>
-              Taxa de entrega
-              {quote ? ` (${(quote.distanceMeters / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km)` : ''}
+              {pickup ? 'Retirada no local' : 'Taxa de entrega'}
+              {quote?.distanceMeters != null
+                ? ` (${(quote.distanceMeters / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km)`
+                : ''}
             </Text>
             {quoting ? (
               <ActivityIndicator size="small" color={colors.primary} />
             ) : (
-              <Text style={styles.optionText}>{quote ? formatCurrency(quote.deliveryFee) : '—'}</Text>
+              <Text style={styles.optionText}>{pickup ? 'Grátis' : quote ? formatCurrency(quote.deliveryFee) : '—'}</Text>
             )}
           </View>
           <View style={styles.summaryRow}>

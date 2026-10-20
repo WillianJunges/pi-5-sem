@@ -5,7 +5,7 @@ import { type DeliveryFeesService, deliveryFeesService } from '../delivery-fees/
 import { type Coordinates, geoService, STORE_LOCATION } from '../geo/geo.service';
 import type { MenuItemDetail } from '../menus/menu.types';
 import { menusRepository } from '../menus/menus.repository';
-import type { NewOrder, Order, OrderQuote, OrderSummary } from './order.types';
+import type { NewOrder, Order, OrderAddress, OrderQuote, OrderSummary } from './order.types';
 import { type OrdersRepository, ordersRepository } from './orders.repository';
 import {
   type CancelOrderInput,
@@ -92,18 +92,11 @@ export class OrdersService {
    * Itens que saíram do cardápio NÃO dão erro aqui: voltam em `unavailableVariantIds` para o
    * app mostrar quais são; o subtotal considera só os disponíveis.
    * Endereço sem localização, fora da área ou dia sem cardápio dão erro (não há o que calcular).
+   * Retirada no local: sem endereço, sem distância e sem taxa (total = subtotal).
    */
   async quote(customerId: string, input: QuoteOrderInput): Promise<OrderQuote> {
-    // 1. Endereço do próprio cliente, localizado no mapa
-    const address = await this.addresses.findById(customerId, input.addressId);
-    if (!address) throw new AppError('Endereço não encontrado', 404);
-    if (address.latitude === null || address.longitude === null) {
-      throw new AppError(
-        'Não conseguimos localizar esse endereço no mapa. Confira a rua e o número em "Meus endereços".',
-        422,
-      );
-    }
-    const destination = { latitude: address.latitude, longitude: address.longitude };
+    // 1. Endereço do próprio cliente, localizado no mapa (só na entrega)
+    const address = input.fulfillment === 'DELIVERY' ? await this.deliveryAddress(customerId, input.addressId) : null;
 
     // 2. Itens com o preço que vale hoje (já com preço especial), direto do cardápio
     const menu = await this.todayMenu();
@@ -137,35 +130,58 @@ export class OrdersService {
       });
     }
 
-    // 3. Distância pelas ruas e taxa da faixa cadastrada pela proprietária
-    const distanceMeters = await this.drivingDistance(this.store, destination);
-    const fee = await this.fees.quote(distanceMeters);
-    if (!fee.covered) {
-      throw new AppError(`Esse endereço está fora da área de entrega (${km(distanceMeters)} da marmitaria).`, 422);
+    // 3. Distância pelas ruas e taxa da faixa cadastrada pela proprietária (só na entrega)
+    let distanceMeters: number | null = null;
+    let deliveryFeeCents = 0;
+    if (address) {
+      distanceMeters = await this.drivingDistance(this.store, {
+        latitude: address.latitude,
+        longitude: address.longitude,
+      });
+      const fee = await this.fees.quote(distanceMeters);
+      if (!fee.covered) {
+        throw new AppError(`Esse endereço está fora da área de entrega (${km(distanceMeters)} da marmitaria).`, 422);
+      }
+      deliveryFeeCents = fee.feeCents;
     }
 
     // 4. Valores (em centavos, sem erro de arredondamento)
     const subtotalCents = items.reduce((sum, i) => sum + i.subtotalCents, 0);
     return {
       menuId: menu.menuId,
-      address: {
-        addressId: address.id,
-        label: address.label,
-        cep: address.cep,
-        street: address.street,
-        number: address.number,
-        complement: address.complement,
-        district: address.district,
-        city: address.city,
-        state: address.state,
-        ...destination,
-      },
+      fulfillment: input.fulfillment,
+      address,
       items,
       unavailableVariantIds,
       distanceMeters,
       subtotalCents,
-      deliveryFeeCents: fee.feeCents,
-      totalCents: subtotalCents + fee.feeCents,
+      deliveryFeeCents,
+      totalCents: subtotalCents + deliveryFeeCents,
+    };
+  }
+
+  /** Cópia do endereço de entrega do próprio cliente; recusa se não foi localizado no mapa. */
+  private async deliveryAddress(customerId: string, addressId: string | null): Promise<OrderAddress> {
+    const address = addressId ? await this.addresses.findById(customerId, addressId) : null;
+    if (!address) throw new AppError('Endereço não encontrado', 404);
+    if (address.latitude === null || address.longitude === null) {
+      throw new AppError(
+        'Não conseguimos localizar esse endereço no mapa. Confira a rua e o número em "Meus endereços".',
+        422,
+      );
+    }
+    return {
+      addressId: address.id,
+      label: address.label,
+      cep: address.cep,
+      street: address.street,
+      number: address.number,
+      complement: address.complement,
+      district: address.district,
+      city: address.city,
+      state: address.state,
+      latitude: address.latitude,
+      longitude: address.longitude,
     };
   }
 
@@ -202,6 +218,7 @@ export class OrdersService {
 
     const id = await this.orders.create(customerId, {
       menuId: quote.menuId,
+      fulfillment: quote.fulfillment,
       paymentMethod: input.paymentMethod,
       changeForCents,
       notes: input.notes,
@@ -223,7 +240,10 @@ export class OrdersService {
     //   (database/schema/019) recusa transições fora do fluxo da seção 11 e preenche
     //   sozinho o horário (confirmed_at, preparing_at...). Valores e itens não mudam.
     //
-    // [Lucas + Yuri · Entregas] O escopo (seção 12) separa pedido e entrega (tabela
+    // [Lucas + Yuri · Entregas] Só pedidos com fulfillment = 'DELIVERY' geram entrega: a
+    //   retirada no local (PICKUP, script 022) não tem endereço nem motoboy; a proprietária
+    //   marca "retirado" (POST /owner/orders/:id/pickup, READY → DELIVERED).
+    //   O escopo (seção 12) separa pedido e entrega (tabela
     //   `deliveries`, estados WAITING_ASSIGNMENT → ASSIGNED → IN_PROGRESS → COMPLETED).
     //   Falta decidir QUEM cria a entrega: aqui, logo após criar o pedido (como
     //   WAITING_ASSIGNMENT), ou quando a proprietária confirma/atribui o motoboy.

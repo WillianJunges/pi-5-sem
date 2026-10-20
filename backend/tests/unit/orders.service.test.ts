@@ -4,7 +4,7 @@ import { DeliveryFeesService } from '../../src/modules/delivery-fees/deliveryFee
 import type { MenuItemDetail } from '../../src/modules/menus/menu.types';
 import type { CancelledBy, NewOrder, Order, OrderStatus, OrderSummary } from '../../src/modules/orders/order.types';
 import type { OrdersRepository } from '../../src/modules/orders/orders.repository';
-import { cancelOrderSchema, createOrderSchema, listOrdersSchema } from '../../src/modules/orders/orders.schemas';
+import { cancelOrderSchema, createOrderSchema, listOrdersSchema, quoteOrderSchema } from '../../src/modules/orders/orders.schemas';
 import { OrdersService, type TodayMenu } from '../../src/modules/orders/orders.service';
 import { expectAppError } from '../support/expectError';
 import { MemoryDeliveryFeesRepository } from '../support/memoryRepositories';
@@ -93,11 +93,12 @@ class MemoryOrdersRepository implements OrdersRepository {
       .map((o) => ({
         id: o.id,
         status: 'PENDING',
+        fulfillment: o.fulfillment,
         isActive: true,
         paymentMethod: o.paymentMethod,
-        addressLabel: o.address.label,
-        addressStreet: o.address.street,
-        addressNumber: o.address.number,
+        addressLabel: o.address?.label ?? null,
+        addressStreet: o.address?.street ?? null,
+        addressNumber: o.address?.number ?? null,
         totalCents: o.totalCents,
         itemCount: o.items.reduce((sum, i) => sum + i.quantity, 0),
         itemsSummary: '',
@@ -317,6 +318,53 @@ describe('Pedidos — cálculo e validação', () => {
       };
       await expectAppError(service.cancel(CUSTOMER, id, cancelBody({})), 409, /acabou de ser atualizado/);
       expect(orders.saved[0].status).toBe('CONFIRMED');
+    });
+  });
+
+  describe('retirada no local', () => {
+    const items = [{ variantId: V2, quantity: 2 }]; // R$ 10,00
+    const pickup = (data: Record<string, unknown> = {}) =>
+      body({ fulfillment: 'PICKUP', addressId: undefined, items, ...data });
+
+    it('sem taxa e sem endereço: total = subtotal', async () => {
+      distance = 99_999; // fora da área: a retirada nem calcula distância
+      const order = await service.create(CUSTOMER, pickup());
+      expect(order).toMatchObject({
+        fulfillment: 'PICKUP',
+        address: null,
+        distanceMeters: null,
+        subtotalCents: 1000,
+        deliveryFeeCents: 0,
+        totalCents: 1000,
+      });
+    });
+
+    it('endereço enviado junto é descartado', async () => {
+      const order = await service.create(CUSTOMER, pickup({ addressId: '6f1c2a10-0000-4000-8000-000000000001' }));
+      expect(order.address).toBeNull();
+    });
+
+    it('prévia sem endereço', async () => {
+      const quote = await service.quote(CUSTOMER, quoteOrderSchema.parse({ fulfillment: 'PICKUP', items }));
+      expect(quote).toMatchObject({ address: null, distanceMeters: null, deliveryFeeCents: 0, totalCents: 1000 });
+    });
+
+    it('troco é conferido com o total sem taxa', async () => {
+      expect((await service.create(CUSTOMER, pickup({ paymentMethod: 'CASH', changeFor: 10 }))).changeForCents).toBe(1000);
+    });
+
+    it('sem cardápio hoje: recusa também', async () => {
+      menu = null;
+      await expectAppError(service.create(CUSTOMER, pickup()), 409, /não há cardápio/);
+    });
+
+    it('sem informar o tipo, o pedido é de entrega', async () => {
+      expect((await service.create(CUSTOMER, body({ items }))).fulfillment).toBe('DELIVERY');
+    });
+
+    it('entrega sem endereço: inválido', () => {
+      expect(() => body({ fulfillment: 'DELIVERY', addressId: undefined, items })).toThrow(/endereço/);
+      expect(() => body({ fulfillment: 'BALCAO', items })).toThrow();
     });
   });
 

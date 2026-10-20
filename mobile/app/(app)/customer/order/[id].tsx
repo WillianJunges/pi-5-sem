@@ -16,11 +16,12 @@ import { TextField } from '../../../../src/components/TextField';
 import { addressLine, formatCep } from '../../../../src/services/addresses.service';
 import { useOrderPolling } from '../../../../src/hooks/useOrderPolling';
 import {
-  ORDER_STATUS_LABEL,
   type Order,
   type OrderStatus,
+  orderStatusLabel,
   ordersService,
   PAYMENT_LABEL,
+  STORE_PICKUP_ADDRESS,
 } from '../../../../src/services/orders.service';
 import { colors, spacing } from '../../../../src/theme';
 import { getErrorMessage } from '../../../../src/utils/errors';
@@ -28,8 +29,10 @@ import { formatCurrency } from '../../../../src/utils/format';
 
 const formatTime = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
+type TimelineStep = { status: OrderStatus; label: string; at: (o: Order) => string | null };
+
 /** Passos do pedido, na ordem do escopo (seção 11). O cancelamento aparece à parte. */
-const TIMELINE: { status: OrderStatus; label: string; at: (o: Order) => string | null }[] = [
+const TIMELINE: TimelineStep[] = [
   { status: 'PENDING', label: 'Pedido enviado', at: (o) => o.createdAt },
   { status: 'CONFIRMED', label: 'Confirmado pela marmitaria', at: (o) => o.confirmedAt },
   { status: 'PREPARING', label: 'Em preparo', at: (o) => o.preparingAt },
@@ -38,15 +41,23 @@ const TIMELINE: { status: OrderStatus; label: string; at: (o: Order) => string |
   { status: 'DELIVERED', label: 'Entregue', at: (o) => o.deliveredAt },
 ];
 
+/** Retirada no local: não sai para entrega; a marmitaria marca quando o cliente busca. */
+const PICKUP_TIMELINE: TimelineStep[] = [
+  ...TIMELINE.slice(0, 3),
+  { status: 'READY', label: 'Pronto para retirada', at: (o) => o.readyAt },
+  { status: 'DELIVERED', label: 'Retirado', at: (o) => o.deliveredAt },
+];
+
 /** Linha do tempo do status: passos já alcançados em destaque, os próximos acinzentados. */
 function StatusTimeline({ order }: { order: Order }) {
+  const steps = order.fulfillment === 'PICKUP' ? PICKUP_TIMELINE : TIMELINE;
   return (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>Acompanhamento</Text>
-      {TIMELINE.map((step, i) => {
+      {steps.map((step, i) => {
         const at = step.at(order);
         const done = at !== null;
-        const last = i === TIMELINE.length - 1;
+        const last = i === steps.length - 1;
         return (
           <View key={step.status} style={styles.step}>
             <View style={styles.stepMarker}>
@@ -170,7 +181,7 @@ export default function OrderScreen() {
         <View style={styles.header}>
           {order.status === 'PENDING' ? <Text style={styles.icon}>✅</Text> : null}
           <Text style={styles.title}>{order.status === 'PENDING' ? 'Pedido enviado!' : 'Seu pedido'}</Text>
-          <Text style={styles.status}>{ORDER_STATUS_LABEL[order.status]}</Text>
+          <Text style={styles.status}>{orderStatusLabel(order.status, order.fulfillment)}</Text>
           <Text style={styles.muted}>
             Pedido #{order.id.slice(0, 8).toUpperCase()} · {formatTime(order.createdAt)}
           </Text>
@@ -200,23 +211,35 @@ export default function OrderScreen() {
           ))}
           <View style={styles.divider} />
           <Row label="Subtotal" value={formatCurrency(order.subtotal)} />
-          <Row
-            label={`Entrega (${(order.distanceMeters / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km)`}
-            value={formatCurrency(order.deliveryFee)}
-          />
+          {order.distanceMeters === null ? (
+            <Row label="Retirada no local" value="Grátis" />
+          ) : (
+            <Row
+              label={`Entrega (${(order.distanceMeters / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km)`}
+              value={formatCurrency(order.deliveryFee)}
+            />
+          )}
           <Row label="Total" value={formatCurrency(order.total)} bold />
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Entrega em</Text>
-          <Text style={styles.text}>{addressLine(order.address)}</Text>
-          <Text style={styles.muted}>
-            {order.address.district} · {order.address.city}/{order.address.state} · {formatCep(order.address.cep)}
-          </Text>
-        </View>
+        {order.address ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Entrega em</Text>
+            <Text style={styles.text}>{addressLine(order.address)}</Text>
+            <Text style={styles.muted}>
+              {order.address.district} · {order.address.city}/{order.address.state} · {formatCep(order.address.cep)}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Retirar em</Text>
+            <Text style={styles.text}>{STORE_PICKUP_ADDRESS.name}</Text>
+            <Text style={styles.muted}>{STORE_PICKUP_ADDRESS.line}</Text>
+          </View>
+        )}
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Pagamento na entrega</Text>
+          <Text style={styles.cardTitle}>{order.fulfillment === 'PICKUP' ? 'Pagamento na retirada' : 'Pagamento na entrega'}</Text>
           <Text style={styles.text}>{PAYMENT_LABEL[order.paymentMethod]}</Text>
           {order.changeFor !== null ? (
             <Text style={styles.muted}>

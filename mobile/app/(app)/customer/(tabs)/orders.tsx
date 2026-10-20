@@ -5,7 +5,7 @@ import { Button } from '../../../../src/components/Button';
 import { EmptyState } from '../../../../src/components/EmptyState';
 import { useAuth } from '../../../../src/contexts/AuthContext';
 import { ordersCache } from '../../../../src/services/ordersCache';
-import { ORDER_STATUS_LABEL, type OrderStatus, type OrderSummary, ordersService } from '../../../../src/services/orders.service';
+import { type OrderStatus, type OrderSummary, orderStatusLabel, ordersService } from '../../../../src/services/orders.service';
 import { colors, spacing } from '../../../../src/theme';
 import { getErrorMessage, isConnectionError } from '../../../../src/utils/errors';
 import { formatCurrency } from '../../../../src/utils/format';
@@ -38,7 +38,7 @@ function OrderCard({ order }: { order: OrderSummary }) {
       <View style={styles.cardHeader}>
         <Text style={styles.when}>{formatWhen(order.createdAt)}</Text>
         <Text style={[styles.badge, { backgroundColor: status.bg, color: status.fg }]}>
-          {ORDER_STATUS_LABEL[order.status]}
+          {orderStatusLabel(order.status, order.fulfillment)}
         </Text>
       </View>
       <Text style={styles.items} numberOfLines={2}>
@@ -46,7 +46,9 @@ function OrderCard({ order }: { order: OrderSummary }) {
       </Text>
       <View style={styles.cardFooter}>
         <Text style={styles.muted} numberOfLines={1}>
-          {order.addressLabel ?? 'Entrega'} · {order.addressStreet}, {order.addressNumber}
+          {order.fulfillment === 'PICKUP'
+            ? 'Retirada no local'
+            : `${order.addressLabel ?? 'Entrega'} · ${order.addressStreet}, ${order.addressNumber}`}
         </Text>
         <Text style={styles.total}>{formatCurrency(order.total)}</Text>
       </View>

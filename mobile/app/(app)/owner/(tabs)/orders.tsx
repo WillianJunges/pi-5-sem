@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../../../../src/components/Button';
 import { EmptyState } from '../../../../src/components/EmptyState';
-import { ORDER_STATUS_LABEL, type OrderStatus } from '../../../../src/services/orders.service';
+import { type OrderStatus, orderStatusLabel } from '../../../../src/services/orders.service';
 import { ownerService, type OwnerOrderSummary } from '../../../../src/services/owner.service';
 import { colors, spacing } from '../../../../src/theme';
 import { getErrorMessage } from '../../../../src/utils/errors';
@@ -40,7 +40,7 @@ function OrderCard({ order }: { order: OwnerOrderSummary }) {
           {order.customer.name}
         </Text>
         <Text style={[styles.badge, { backgroundColor: status.bg, color: status.fg }]}>
-          {ORDER_STATUS_LABEL[order.status]}
+          {orderStatusLabel(order.status, order.fulfillment)}
         </Text>
       </View>
       <Text style={styles.items} numberOfLines={2}>
@@ -49,6 +49,7 @@ function OrderCard({ order }: { order: OwnerOrderSummary }) {
       <View style={styles.cardFooter}>
         <Text style={styles.muted}>
           #{order.id.slice(0, 8).toUpperCase()} · {formatWhen(order.createdAt)}
+          {order.fulfillment === 'PICKUP' ? ' · Retirada no local' : ''}
         </Text>
         <Text style={styles.total}>{formatCurrency(order.total)}</Text>
       </View>

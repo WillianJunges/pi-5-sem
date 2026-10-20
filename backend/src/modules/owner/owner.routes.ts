@@ -48,6 +48,7 @@ ownerRoutes.get('/orders/:id', ownerOrdersController.get);
 ownerRoutes.post('/orders/:id/confirm', ownerOrdersController.confirm);
 ownerRoutes.post('/orders/:id/prepare', ownerOrdersController.prepare);
 ownerRoutes.post('/orders/:id/ready', ownerOrdersController.ready);
+ownerRoutes.post('/orders/:id/pickup', ownerOrdersController.pickup);
 ownerRoutes.post('/orders/:id/cancel', ownerOrdersController.cancel);
 
 // Motoboys (escopo, seção 3)

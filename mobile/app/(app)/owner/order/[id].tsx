@@ -4,11 +4,12 @@ import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleS
 import { Button } from '../../../../src/components/Button';
 import { EmptyState } from '../../../../src/components/EmptyState';
 import { addressLine, formatCep } from '../../../../src/services/addresses.service';
-import { ORDER_STATUS_LABEL, PAYMENT_LABEL } from '../../../../src/services/orders.service';
+import { orderStatusLabel, PAYMENT_LABEL } from '../../../../src/services/orders.service';
 import {
   CANCELLABLE,
   NEXT_ACTION,
   type OwnerOrder,
+  PICKUP_ACTION,
   type OwnerOrderAction,
   ownerService,
 } from '../../../../src/services/owner.service';
@@ -30,6 +31,7 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: 
 /**
  * Pedido para a proprietária (item 5): itens, cliente, entrega, pagamento e as ações
  * confirmar → iniciar preparo → marcar como pronto, além de cancelar (até "pronto").
+ * Na retirada no local (módulo do Cliente), "pronto" → "marcar como retirado".
  */
 export default function OwnerOrderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -88,7 +90,8 @@ export default function OwnerOrderScreen() {
     );
   }
 
-  const next = NEXT_ACTION[order.status];
+  const pickup = order.fulfillment === 'PICKUP';
+  const next = pickup && order.status === 'READY' ? PICKUP_ACTION : NEXT_ACTION[order.status];
   const canCancel = CANCELLABLE.includes(order.status);
 
   return (
@@ -98,7 +101,8 @@ export default function OwnerOrderScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
     >
       <View style={styles.header}>
-        <Text style={styles.status}>{ORDER_STATUS_LABEL[order.status]}</Text>
+        <Text style={styles.status}>{orderStatusLabel(order.status, order.fulfillment)}</Text>
+        {pickup ? <Text style={styles.pickupBadge}>Retirada no local</Text> : null}
         <Text style={styles.muted}>
           Pedido #{order.id.slice(0, 8).toUpperCase()} · feito às {time(order.createdAt)}
         </Text>
@@ -115,7 +119,9 @@ export default function OwnerOrderScreen() {
         </View>
       ) : null}
       {order.status === 'READY' ? (
-        <Text style={styles.notice}>Pronto: aguardando a saída para entrega.</Text>
+        <Text style={styles.notice}>
+          {pickup ? 'Pronto: aguardando o cliente buscar.' : 'Pronto: aguardando a saída para entrega.'}
+        </Text>
       ) : null}
 
       <View style={styles.card}>
@@ -129,10 +135,14 @@ export default function OwnerOrderScreen() {
         ))}
         <View style={styles.divider} />
         <Row label="Subtotal" value={formatCurrency(order.subtotal)} />
-        <Row
-          label={`Entrega (${(order.distanceMeters / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km)`}
-          value={formatCurrency(order.deliveryFee)}
-        />
+        {order.distanceMeters === null ? (
+          <Row label="Retirada no local" value="Sem taxa" />
+        ) : (
+          <Row
+            label={`Entrega (${(order.distanceMeters / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km)`}
+            value={formatCurrency(order.deliveryFee)}
+          />
+        )}
         <Row label="Total" value={formatCurrency(order.total)} bold />
       </View>
 
@@ -149,20 +159,23 @@ export default function OwnerOrderScreen() {
         {order.customer.phone ? <Text style={styles.muted}>{order.customer.phone}</Text> : null}
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Entregar em</Text>
-        <Text style={styles.text}>{addressLine(order.address)}</Text>
-        <Text style={styles.muted}>
-          {order.address.district} · {order.address.city}/{order.address.state} · {formatCep(order.address.cep)}
-        </Text>
-      </View>
+      {order.address ? (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Entregar em</Text>
+          <Text style={styles.text}>{addressLine(order.address)}</Text>
+          <Text style={styles.muted}>
+            {order.address.district} · {order.address.city}/{order.address.state} · {formatCep(order.address.cep)}
+          </Text>
+        </View>
+      ) : null}
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Pagamento na entrega</Text>
+        <Text style={styles.cardTitle}>{pickup ? 'Pagamento na retirada' : 'Pagamento na entrega'}</Text>
         <Text style={styles.text}>{PAYMENT_LABEL[order.paymentMethod]}</Text>
         {order.changeFor !== null ? (
           <Text style={styles.muted}>
-            Troco para {formatCurrency(order.changeFor)} (levar {formatCurrency(order.changeFor - order.total)})
+            Troco para {formatCurrency(order.changeFor)} ({pickup ? 'separar' : 'levar'}{' '}
+            {formatCurrency(order.changeFor - order.total)})
           </Text>
         ) : null}
       </View>
@@ -188,6 +201,7 @@ const styles = StyleSheet.create({
   actions: { gap: spacing.sm },
   cancel: { alignItems: 'center', paddingVertical: spacing.sm },
   cancelText: { fontSize: 15, fontWeight: '600', color: colors.danger },
+  pickupBadge: { fontSize: 14, fontWeight: '600', color: colors.text },
   notice: { fontSize: 14, color: colors.text, backgroundColor: '#FFF7ED', padding: spacing.sm, borderRadius: 8 },
   card: { backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md, gap: spacing.xs },
   cardTitle: { fontSize: 15, fontWeight: 'bold', color: colors.text, marginBottom: spacing.xs },

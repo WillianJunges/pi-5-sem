@@ -14,6 +14,13 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export const PAYMENT_METHODS = ['CASH', 'PIX', 'CREDIT_CARD', 'DEBIT_CARD'] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
+/**
+ * Entrega no endereço do cliente ou retirada no local (decisão da equipe; o escopo não
+ * trata). Retirada não tem endereço, distância nem taxa (database/schema/022).
+ */
+export const FULFILLMENT_TYPES = ['DELIVERY', 'PICKUP'] as const;
+export type Fulfillment = (typeof FULFILLMENT_TYPES)[number];
+
 /** Cópia do endereço no momento do pedido (escopo, seção 18). */
 export interface OrderAddress {
   addressId: string;
@@ -46,11 +53,14 @@ export interface Order {
   customerId: string;
   menuId: string;
   status: OrderStatus;
+  fulfillment: Fulfillment;
   paymentMethod: PaymentMethod;
   changeForCents: number | null;
   notes: string | null;
-  address: OrderAddress;
-  distanceMeters: number;
+  /** null na retirada no local. */
+  address: OrderAddress | null;
+  /** null na retirada no local. */
+  distanceMeters: number | null;
   subtotalCents: number;
   deliveryFeeCents: number;
   totalCents: number;
@@ -78,12 +88,15 @@ export type NewOrder = Omit<Order, 'id' | 'customerId' | 'status' | 'items' | `$
 /** Prévia dos valores (POST /orders/quote). Também é a base do pedido gravado. */
 export interface OrderQuote {
   menuId: string;
-  address: OrderAddress;
+  fulfillment: Fulfillment;
+  /** null na retirada no local. */
+  address: OrderAddress | null;
   /** Só os itens disponíveis hoje, com o preço aplicado. */
   items: Omit<OrderItem, 'id'>[];
   /** Variações do carrinho que saíram do cardápio de hoje. */
   unavailableVariantIds: string[];
-  distanceMeters: number;
+  /** null na retirada no local. */
+  distanceMeters: number | null;
   subtotalCents: number;
   deliveryFeeCents: number;
   totalCents: number;
@@ -93,12 +106,14 @@ export interface OrderQuote {
 export interface OrderSummary {
   id: string;
   status: OrderStatus;
+  fulfillment: Fulfillment;
   /** true enquanto não foi entregue nem cancelado. */
   isActive: boolean;
   paymentMethod: PaymentMethod;
   addressLabel: string | null;
-  addressStreet: string;
-  addressNumber: string;
+  /** null na retirada no local. */
+  addressStreet: string | null;
+  addressNumber: string | null;
   totalCents: number;
   itemCount: number;
   /** "2x Marmita de Frango (Média), 1x Coca-Cola (Lata 350 ml)" */

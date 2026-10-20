@@ -75,7 +75,6 @@ export default function CartScreen() {
           <Text style={styles.subtotalLabel}>Subtotal</Text>
           <Text style={styles.subtotalValue}>{formatCurrency(subtotal)}</Text>
         </View>
-        <Text style={styles.feeHint}>A taxa de entrega é calculada no próximo passo.</Text>
         <Button title="Continuar" onPress={() => router.push('/customer/checkout')} />
       </View>
     </View>
@@ -111,5 +110,4 @@ const styles = StyleSheet.create({
   subtotalRow: { flexDirection: 'row', justifyContent: 'space-between' },
   subtotalLabel: { fontSize: 16, color: colors.text },
   subtotalValue: { fontSize: 18, fontWeight: 'bold', color: colors.text },
-  feeHint: { fontSize: 13, color: colors.muted },
 });

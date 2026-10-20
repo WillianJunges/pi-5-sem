@@ -1,4 +1,4 @@
-import type { Order, OrderStatus, OrderSummary } from '../orders/order.types';
+import type { Fulfillment, Order, OrderStatus, OrderSummary } from '../orders/order.types';
 
 /** Quem fez o pedido (a proprietária precisa saber para quem entregar e com quem falar). */
 export interface OrderCustomer {
@@ -17,7 +17,7 @@ export interface OwnerOrder extends Order {
 }
 
 /** Ações da proprietária sobre o pedido (item 5 da divisão de atividades). */
-export const OWNER_ACTIONS = ['confirm', 'prepare', 'ready', 'cancel'] as const;
+export const OWNER_ACTIONS = ['confirm', 'prepare', 'ready', 'pickup', 'cancel'] as const;
 export type OwnerAction = (typeof OWNER_ACTIONS)[number];
 
 /**
@@ -25,10 +25,14 @@ export type OwnerAction = (typeof OWNER_ACTIONS)[number];
  * o mesmo que o banco confere em fn_order_status_allowed (script 019):
  *   PENDING → CONFIRMED → PREPARING → READY; cancelar de PENDING até READY.
  * "Saiu para entrega" e "Entregue" pertencem às entregas (motoboy), não a estas ações.
+ * Exceção: na retirada no local (script 022) não há motoboy, então a proprietária marca
+ * "retirado" quando o cliente busca o pedido (READY → DELIVERED). `only` limita a ação
+ * a um tipo de pedido.
  */
-export const ACTION_FLOW: Record<OwnerAction, { from: OrderStatus[]; to: OrderStatus }> = {
+export const ACTION_FLOW: Record<OwnerAction, { from: OrderStatus[]; to: OrderStatus; only?: Fulfillment }> = {
   confirm: { from: ['PENDING'], to: 'CONFIRMED' },
   prepare: { from: ['CONFIRMED'], to: 'PREPARING' },
   ready: { from: ['PREPARING'], to: 'READY' },
+  pickup: { from: ['READY'], to: 'DELIVERED', only: 'PICKUP' },
   cancel: { from: ['PENDING', 'CONFIRMED', 'PREPARING', 'READY'], to: 'CANCELLED' },
 };

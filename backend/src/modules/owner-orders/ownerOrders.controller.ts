@@ -30,5 +30,6 @@ export const ownerOrdersController = {
   confirm: action('confirm'),
   prepare: action('prepare'),
   ready: action('ready'),
+  pickup: action('pickup'),
   cancel: action('cancel'),
 };
