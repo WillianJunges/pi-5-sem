@@ -37,6 +37,23 @@ trazem também `issues: [{ field, message }]`.
 | 401 | Login/senha errados, token inválido ou expirado |
 | 403 | Usuário desativado |
 | 409 | E-mail já cadastrado |
+| 429 | Login bloqueado por senhas erradas (ver abaixo) |
+
+### Limite de tentativas de login
+
+Proteção contra quem tenta adivinhar a senha (script `023_users_login_attempts.sql`):
+
+- Até a 5ª senha errada seguida: só "E-mail ou senha inválidos".
+- Da 6ª à 9ª: a mensagem avisa quantas tentativas restam ("Restam 4 tentativas antes do bloqueio de 10 minutos").
+- Na 10ª: **429**, login bloqueado por **10 minutos**. Durante o bloqueio nem a senha certa entra
+  (a senha nem é conferida) e a mensagem diz quanto falta.
+- Passado o bloqueio, a pessoa ganha as 10 tentativas de novo. Acertar a senha zera o contador.
+
+No banco, `users.failed_login_attempts` e `users.locked_until` (UTC). A soma e o bloqueio são feitos
+pela procedure `sp_register_login_failure` num UPDATE só (duas tentativas ao mesmo tempo não se perdem);
+`sp_reset_login_failures` zera tudo no login certo. Os dois campos nunca vão para o app. Cada tentativa
+com a conta bloqueada é registrada no MongoDB como `LOGIN_LOCKED`. Limites em `auth.service.ts`
+(`MAX_LOGIN_ATTEMPTS`, `WARN_AFTER_ATTEMPTS`, `LOCK_MINUTES`).
 
 ## Usando no app
 

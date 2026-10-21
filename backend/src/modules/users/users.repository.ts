@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { RowDataPacket } from 'mysql2/promise';
 import { db } from '../../config/database';
 import { translateDatabaseError } from '../../shared/errors/databaseErrors';
-import type { CreateUserData, Role, User, UserSummary } from './user.types';
+import type { CreateUserData, LoginFailure, Role, User, UserSummary } from './user.types';
 
 /**
  * Contrato de acesso aos usuários. Services dependem só desta interface;
@@ -13,6 +13,10 @@ export interface UsersRepository {
   findByEmail(email: string): Promise<User | null>;
   create(data: CreateUserData): Promise<User>;
   list(filter?: { role?: Role }): Promise<UserSummary[]>;
+  /** Soma uma senha errada; no limite, bloqueia por `lockMinutes` (sp_register_login_failure). */
+  registerLoginFailure(id: string, maxAttempts: number, lockMinutes: number): Promise<LoginFailure>;
+  /** Login certo: zera o contador e tira o bloqueio. */
+  resetLoginFailures(id: string): Promise<void>;
 }
 
 interface UserRow extends RowDataPacket {
@@ -23,8 +27,15 @@ interface UserRow extends RowDataPacket {
   password_hash: string;
   role: Role;
   active: number;
+  failed_login_attempts: number;
+  locked_until: Date | null;
   created_at: Date;
   updated_at: Date;
+}
+
+interface LoginFailureRow extends RowDataPacket {
+  failed_login_attempts: number;
+  locked_until: Date | null;
 }
 
 interface UserSummaryRow extends RowDataPacket {
@@ -49,6 +60,8 @@ function mapRow(row: UserRow): User {
     passwordHash: row.password_hash,
     role: row.role,
     active: Boolean(row.active),
+    failedLoginAttempts: row.failed_login_attempts,
+    lockedUntil: row.locked_until,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -106,6 +119,21 @@ export class MySqlUsersRepository implements UsersRepository {
       ? await db.query<UserSummaryRow[]>('SELECT * FROM vw_users WHERE role = ? ORDER BY name', [filter.role])
       : await db.query<UserSummaryRow[]>('SELECT * FROM vw_users ORDER BY name');
     return rows.map(mapSummaryRow);
+  }
+
+  async registerLoginFailure(id: string, maxAttempts: number, lockMinutes: number): Promise<LoginFailure> {
+    // CALL devolve [resultado do SELECT, cabeçalho]; o SELECT final da procedure vem em [0]
+    const [results] = await db.query<LoginFailureRow[][]>('CALL sp_register_login_failure(?, ?, ?)', [
+      id,
+      maxAttempts,
+      lockMinutes,
+    ]);
+    const row = results[0][0];
+    return { failedLoginAttempts: row.failed_login_attempts, lockedUntil: row.locked_until };
+  }
+
+  async resetLoginFailures(id: string): Promise<void> {
+    await db.query('CALL sp_reset_login_failures(?)', [id]);
   }
 }
 

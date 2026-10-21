@@ -1,6 +1,7 @@
 import type { Role } from '../users/user.types';
 
-export type AccessLogEvent = 'REGISTER' | 'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT';
+/** LOGIN_LOCKED: tentativa de entrar com a conta bloqueada por senhas erradas (script 023). */
+export type AccessLogEvent = 'REGISTER' | 'LOGIN' | 'LOGIN_FAILED' | 'LOGIN_LOCKED' | 'LOGOUT';
 
 /**
  * Documento da coleção access_logs (MongoDB).

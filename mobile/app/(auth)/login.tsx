@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../../src/components/Button';
 import { TextField } from '../../src/components/TextField';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { ApiError } from '../../src/services/api';
 import { colors, spacing } from '../../src/theme';
 import { getErrorMessage } from '../../src/utils/errors';
 
@@ -13,6 +14,8 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  /** Login bloqueado por senhas erradas (429): mostra o aviso em destaque. */
+  const [locked, setLocked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit() {
@@ -21,11 +24,13 @@ export default function LoginScreen() {
       return;
     }
     setError(null);
+    setLocked(false);
     setSubmitting(true);
     try {
       await signIn(email, password);
       // O layout raiz troca para a área logada automaticamente.
     } catch (err) {
+      setLocked(err instanceof ApiError && err.status === 429);
       setError(getErrorMessage(err));
       setSubmitting(false);
     }
@@ -59,7 +64,14 @@ export default function LoginScreen() {
             onSubmitEditing={handleSubmit}
           />
 
-          {error && <Text style={styles.error}>{error}</Text>}
+          {error && locked ? (
+            <View style={styles.lockedBox}>
+              <Text style={styles.lockedTitle}>🔒 Login bloqueado</Text>
+              <Text style={styles.lockedText}>{error}</Text>
+            </View>
+          ) : error ? (
+            <Text style={styles.error}>{error}</Text>
+          ) : null}
 
           <Button title="Entrar" onPress={handleSubmit} loading={submitting} />
 
@@ -79,6 +91,9 @@ const styles = StyleSheet.create({
   title: { fontSize: 32, fontWeight: 'bold', color: colors.primary },
   subtitle: { fontSize: 16, color: colors.muted },
   error: { color: colors.danger },
+  lockedBox: { gap: spacing.xs, padding: spacing.md, borderRadius: 10, backgroundColor: '#FFF7ED' },
+  lockedTitle: { fontSize: 15, fontWeight: 'bold', color: colors.text },
+  lockedText: { fontSize: 14, color: colors.text },
   link: { textAlign: 'center', color: colors.muted, marginTop: spacing.sm },
   linkStrong: { color: colors.primary, fontWeight: '600' },
 });
