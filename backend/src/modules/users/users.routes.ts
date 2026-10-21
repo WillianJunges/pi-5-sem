@@ -6,5 +6,7 @@ import { usersController } from './users.controller';
 export const usersRoutes = Router();
 
 usersRoutes.get('/me', authenticate, usersController.me);
+usersRoutes.put('/me', authenticate, usersController.updateMe);
+usersRoutes.put('/me/password', authenticate, usersController.changePassword);
 usersRoutes.get('/me/access-logs', authenticate, usersController.myAccessLogs);
 usersRoutes.get('/', authenticate, authorize('OWNER'), usersController.list);

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { phoneSchema } from '../../shared/utils/phone';
 
 // trim antes de validar: o teclado do celular costuma deixar espaço no fim do e-mail
 const email = z.string().trim().toLowerCase().pipe(z.email('E-mail inválido'));
@@ -7,7 +8,8 @@ const password = z.string().min(6, 'A senha deve ter pelo menos 6 caracteres').m
 export const registerSchema = z.object({
   name: z.string().trim().min(2, 'Informe o nome').max(120),
   email,
-  phone: z.string().trim().max(20).optional(),
+  /** Obrigatório: a marmitaria e o motoboy precisam conseguir falar com o cliente. */
+  phone: phoneSchema,
   password,
 });
 

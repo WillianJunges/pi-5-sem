@@ -5,6 +5,7 @@ import { TextField } from '../../src/components/TextField';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { colors, spacing } from '../../src/theme';
 import { getErrorMessage } from '../../src/utils/errors';
+import { isValidPhone, maskPhone } from '../../src/utils/format';
 
 export default function RegisterScreen() {
   const { signUp } = useAuth();
@@ -17,6 +18,7 @@ export default function RegisterScreen() {
   function validate(): string | null {
     if (form.name.trim().length < 2) return 'Informe seu nome.';
     if (!form.email.trim()) return 'Informe seu e-mail.';
+    if (!isValidPhone(form.phone)) return 'Informe seu telefone com DDD.';
     if (form.password.length < 6) return 'A senha deve ter pelo menos 6 caracteres.';
     if (form.password !== form.confirm) return 'As senhas não conferem.';
     return null;
@@ -34,7 +36,7 @@ export default function RegisterScreen() {
       await signUp({
         name: form.name,
         email: form.email,
-        phone: form.phone.trim() || undefined,
+        phone: form.phone,
         password: form.password,
       });
     } catch (err) {
@@ -56,9 +58,10 @@ export default function RegisterScreen() {
           autoComplete="email"
         />
         <TextField
-          label="Telefone (opcional)"
+          label="Telefone (com DDD)"
           value={form.phone}
-          onChangeText={set('phone')}
+          onChangeText={(text) => set('phone')(maskPhone(text))}
+          placeholder="(19) 99999-8888"
           keyboardType="phone-pad"
           autoComplete="tel"
         />

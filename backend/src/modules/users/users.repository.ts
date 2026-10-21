@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { RowDataPacket } from 'mysql2/promise';
 import { db } from '../../config/database';
 import { translateDatabaseError } from '../../shared/errors/databaseErrors';
-import type { CreateUserData, LoginFailure, Role, User, UserSummary } from './user.types';
+import type { CreateUserData, LoginFailure, ProfileData, Role, User, UserSummary } from './user.types';
 
 /**
  * Contrato de acesso aos usuários. Services dependem só desta interface;
@@ -17,6 +17,10 @@ export interface UsersRepository {
   registerLoginFailure(id: string, maxAttempts: number, lockMinutes: number): Promise<LoginFailure>;
   /** Login certo: zera o contador e tira o bloqueio. */
   resetLoginFailures(id: string): Promise<void>;
+  /** Nome e telefone (o trigger do script 025 registra na auditoria). */
+  updateProfile(id: string, data: ProfileData): Promise<void>;
+  /** Troca a senha pelo perfil (sp_change_password). */
+  changePassword(id: string, passwordHash: string): Promise<void>;
 }
 
 interface UserRow extends RowDataPacket {
@@ -134,6 +138,22 @@ export class MySqlUsersRepository implements UsersRepository {
 
   async resetLoginFailures(id: string): Promise<void> {
     await db.query('CALL sp_reset_login_failures(?)', [id]);
+  }
+
+  async updateProfile(id: string, data: ProfileData): Promise<void> {
+    try {
+      await db.query('UPDATE users SET name = ?, phone = ? WHERE id = ?', [data.name, data.phone, id]);
+    } catch (err) {
+      throw translateDatabaseError(err);
+    }
+  }
+
+  async changePassword(id: string, passwordHash: string): Promise<void> {
+    try {
+      await db.query('CALL sp_change_password(?, ?)', [id, passwordHash]);
+    } catch (err) {
+      throw translateDatabaseError(err);
+    }
   }
 }
 

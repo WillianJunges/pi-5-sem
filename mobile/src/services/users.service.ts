@@ -10,6 +10,16 @@ export const usersService = {
     return api<User>('/users/me');
   },
 
+  /** Edita o próprio nome e telefone (PUT /users/me). O e-mail não muda. */
+  updateMe(data: { name: string; phone: string }): Promise<User> {
+    return api<User>('/users/me', { method: 'PUT', body: data });
+  },
+
+  /** Troca a senha; exige a senha atual (PUT /users/me/password). */
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await api('/users/me/password', { method: 'PUT', body: { currentPassword, newPassword } });
+  },
+
   /** Último perfil carregado, guardado no aparelho para o app abrir mesmo sem internet. */
   async getCached(): Promise<User | null> {
     const json = await SecureStore.getItemAsync(CACHED_USER_KEY);
