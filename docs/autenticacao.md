@@ -22,6 +22,8 @@
 | POST | `/auth/login` | `{ email, password }` | `200 { user, accessToken, refreshToken }` |
 | POST | `/auth/refresh` | `{ refreshToken }` | `200 { user, accessToken, refreshToken }` |
 | POST | `/auth/logout` | `{ refreshToken }` | `204` |
+| POST | `/auth/forgot-password` | `{ email }` | `200 { message, expiresInMinutes, code? }` |
+| POST | `/auth/reset-password` | `{ email, code, password }` | `204` |
 
 O cadastro público cria sempre um **CUSTOMER**. Proprietária e motoboys são criados de
 outra forma (ver módulo da proprietária).
@@ -54,6 +56,25 @@ pela procedure `sp_register_login_failure` num UPDATE só (duas tentativas ao me
 `sp_reset_login_failures` zera tudo no login certo. Os dois campos nunca vão para o app. Cada tentativa
 com a conta bloqueada é registrada no MongoDB como `LOGIN_LOCKED`. Limites em `auth.service.ts`
 (`MAX_LOGIN_ATTEMPTS`, `WARN_AFTER_ATTEMPTS`, `LOCK_MINUTES`).
+
+### Esqueci minha senha
+
+Script `024_password_resets.sql`. Na tela de login, **Esqueci minha senha** abre a recuperação em dois passos:
+
+1. `POST /auth/forgot-password { email }` gera um código de **6 números**, válido por **15 minutos**.
+   Pedir outro invalida o anterior. E-mail sem conta ativa → 404.
+2. `POST /auth/reset-password { email, code, password }` troca a senha. Código errado avisa quantas
+   tentativas restam; no 5º erro o código deixa de valer.
+
+**Simulação do e-mail (decisão da equipe):** o projeto não tem serviço de e-mail, então o código volta na
+resposta (`code`) e o app mostra na tela, num quadro "E-mail (simulado)". Isso só acontece fora de produção
+(`NODE_ENV` diferente de `production` e `SHOW_RESET_CODE` diferente de `false`). Para enviar de verdade, basta
+mandar o código por e-mail em `PasswordResetService.requestCode` e não devolver mais na resposta.
+
+No banco guardamos só o hash do código (`password_resets.code_hash`). A troca é feita pela procedure
+`sp_complete_password_reset`, numa transação: troca a senha, marca o código como usado, **tira o bloqueio de
+login**, **encerra todas as sessões abertas** (outros aparelhos precisam entrar de novo) e registra
+`password` na `user_audit`.
 
 ## Usando no app
 
