@@ -11,7 +11,7 @@ import type { AccessLog } from '../../src/modules/access-logs/accessLog.types';
 import type { AccessLogsRepository } from '../../src/modules/access-logs/accessLogs.repository';
 import type { PasswordReset, PasswordResetsRepository } from '../../src/modules/auth/passwordResets.repository';
 import type { RefreshToken, RefreshTokensRepository } from '../../src/modules/auth/refreshTokens.repository';
-import type { CreateUserData, LoginFailure, Role, User, UserSummary } from '../../src/modules/users/user.types';
+import type { CreateUserData, LoginFailure, ProfileData, Role, User, UserSummary } from '../../src/modules/users/user.types';
 import type { UsersRepository } from '../../src/modules/users/users.repository';
 
 /**
@@ -327,6 +327,12 @@ export class MemoryUsersRepository implements UsersRepository {
     const user = this.users.find((u) => u.id === id)!;
     user.failedLoginAttempts = 0;
     user.lockedUntil = null;
+  }
+  async updateProfile(id: string, data: ProfileData) {
+    Object.assign(this.users.find((u) => u.id === id)!, data);
+  }
+  async changePassword(id: string, passwordHash: string) {
+    this.users.find((u) => u.id === id)!.passwordHash = passwordHash;
   }
 }
 

@@ -23,7 +23,8 @@ interface AuthResponse {
 export interface RegisterData {
   name: string;
   email: string;
-  phone?: string;
+  /** Obrigatório, com DDD. */
+  phone: string;
   password: string;
 }
 

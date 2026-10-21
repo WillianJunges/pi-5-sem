@@ -37,6 +37,12 @@ export interface UserSummary extends PublicUser {
   activeSessions: number;
 }
 
+/** O que o próprio usuário pode mudar no perfil (o e-mail não: é o login). */
+export interface ProfileData {
+  name: string;
+  phone: string;
+}
+
 export interface CreateUserData {
   name: string;
   email: string;

@@ -151,3 +151,54 @@ describe('Esqueci minha senha (script 024)', () => {
     expect(res.body.error).toMatch(/expirado/);
   });
 });
+
+describe('Perfil editável (script 025)', () => {
+  const auth = async () => ({ Authorization: `Bearer ${(await login(PASSWORD)).body.accessToken}` });
+
+  it('cadastro exige telefone e guarda formatado', async () => {
+    const data = { name: 'Bia', email: 'bia@teste.com', password: '123456' };
+    expect((await request(app).post('/auth/register').send(data)).status).toBe(400);
+    const res = await request(app).post('/auth/register').send({ ...data, phone: '19988887777' });
+    expect(res.status).toBe(201);
+    expect(res.body.user.phone).toBe('(19) 98888-7777');
+  });
+
+  it('edita nome e telefone; o trigger registra na auditoria', async () => {
+    const res = await request(app)
+      .put('/users/me')
+      .set(await auth())
+      .send({ name: 'Ana Souza', phone: '1933334444', email: 'outro@teste.com' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ name: 'Ana Souza', phone: '(19) 3333-4444', email: EMAIL });
+
+    const [audit] = await admin.query<mysql.RowDataPacket[]>(
+      "SELECT field, old_value, new_value FROM user_audit WHERE field IN ('name', 'phone') ORDER BY field",
+    );
+    expect(audit).toEqual([
+      { field: 'name', old_value: 'Ana', new_value: 'Ana Souza' },
+      { field: 'phone', old_value: '(19) 99999-8888', new_value: '(19) 3333-4444' },
+    ]);
+  });
+
+  it('troca a senha com a senha atual; a errada é recusada', async () => {
+    const headers = await auth();
+    const wrong = await request(app)
+      .put('/users/me/password')
+      .set(headers)
+      .send({ currentPassword: 'errada', newPassword: 'senha-nova' });
+    expect(wrong.status).toBe(400);
+
+    const ok = await request(app)
+      .put('/users/me/password')
+      .set(headers)
+      .send({ currentPassword: PASSWORD, newPassword: 'senha-nova' });
+    expect(ok.status).toBe(204);
+    expect((await login('senha-nova')).status).toBe(200);
+    const [audit] = await admin.query<mysql.RowDataPacket[]>("SELECT new_value FROM user_audit WHERE field = 'password'");
+    expect(audit.map((a) => a.new_value)).toEqual(['changed']);
+  });
+
+  it('sem login: 401', async () => {
+    expect((await request(app).put('/users/me').send({ name: 'X', phone: '19999998888' })).status).toBe(401);
+  });
+});

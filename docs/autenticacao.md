@@ -18,14 +18,15 @@
 
 | Método | Rota | Corpo | Resposta |
 |---|---|---|---|
-| POST | `/auth/register` | `{ name, email, password, phone? }` | `201 { user, accessToken, refreshToken }` |
+| POST | `/auth/register` | `{ name, email, password, phone }` | `201 { user, accessToken, refreshToken }` |
 | POST | `/auth/login` | `{ email, password }` | `200 { user, accessToken, refreshToken }` |
 | POST | `/auth/refresh` | `{ refreshToken }` | `200 { user, accessToken, refreshToken }` |
 | POST | `/auth/logout` | `{ refreshToken }` | `204` |
 | POST | `/auth/forgot-password` | `{ email }` | `200 { message, expiresInMinutes, code? }` |
 | POST | `/auth/reset-password` | `{ email, code, password }` | `204` |
 
-O cadastro público cria sempre um **CUSTOMER**. Proprietária e motoboys são criados de
+O **telefone é obrigatório** no cadastro (com DDD; aceita com ou sem máscara e é guardado como
+`(19) 99999-8888`). O cadastro público cria sempre um **CUSTOMER**. Proprietária e motoboys são criados de
 outra forma (ver módulo da proprietária).
 
 ### Erros
@@ -117,8 +118,15 @@ const userId = req.user!.id;
 | Método | Rota | Resposta |
 |---|---|---|
 | GET | `/users/me` | `200 { id, name, email, phone, role, active, createdAt, updatedAt }` |
+| PUT | `/users/me` | `{ name, phone }` → `200` com o perfil atualizado (o e-mail não muda: é o login) |
+| PUT | `/users/me/password` | `{ currentPassword, newPassword }` → `204` (senha atual errada → 400) |
 | GET | `/users/me/access-logs` | `200 [{ event, success, user, device, createdAt }]` (últimos 20, MongoDB) |
 | GET | `/users?role=COURIER` | `200 [{ ..., roleLabel, activeSessions }]` — **só OWNER** (view `vw_users`) |
+
+Na tela **Meu perfil** do app (todos os perfis) dá para editar nome e telefone e trocar a senha.
+No banco (script `025_users_profile.sql`), o trigger `trg_users_after_update` passou a registrar também
+mudanças de **nome** e **telefone** na `user_audit`, e a troca de senha usa a procedure `sp_change_password`
+(registra `password` na auditoria, sem guardar a senha).
 
 ## Criando usuários de teste (proprietária, motoboy)
 
