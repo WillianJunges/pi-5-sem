@@ -9,6 +9,7 @@ import type { Product, ProductData, ProductVariant, VariantData } from '../../sr
 import type { ProductsRepository } from '../../src/modules/products/products.repository';
 import type { AccessLog } from '../../src/modules/access-logs/accessLog.types';
 import type { AccessLogsRepository } from '../../src/modules/access-logs/accessLogs.repository';
+import type { PasswordReset, PasswordResetsRepository } from '../../src/modules/auth/passwordResets.repository';
 import type { RefreshToken, RefreshTokensRepository } from '../../src/modules/auth/refreshTokens.repository';
 import type { CreateUserData, LoginFailure, Role, User, UserSummary } from '../../src/modules/users/user.types';
 import type { UsersRepository } from '../../src/modules/users/users.repository';
@@ -353,5 +354,32 @@ export class MemoryAccessLogsRepository implements AccessLogsRepository {
   }
   async listByUser(userId: string) {
     return this.logs.filter((l) => l.user?.id === userId);
+  }
+}
+
+/** Códigos de "Esqueci minha senha"; `complete` faz o mesmo que sp_complete_password_reset. */
+export class MemoryPasswordResetsRepository implements PasswordResetsRepository {
+  resets: (PasswordReset & { usedAt: Date | null })[] = [];
+  constructor(
+    private readonly users: MemoryUsersRepository,
+    private readonly now: () => Date = () => new Date(),
+  ) {}
+  async create(userId: string, codeHash: string, expiresAt: Date) {
+    for (const r of this.resets) if (r.userId === userId && !r.usedAt) r.usedAt = this.now();
+    this.resets.push({ id: randomUUID(), userId, codeHash, attempts: 0, expiresAt, usedAt: null });
+  }
+  async findValid(userId: string) {
+    return [...this.resets].reverse().find((r) => r.userId === userId && !r.usedAt && r.expiresAt > this.now()) ?? null;
+  }
+  async registerAttempt(id: string) {
+    const reset = this.resets.find((r) => r.id === id)!;
+    reset.attempts += 1;
+    return reset.attempts;
+  }
+  async complete(userId: string, resetId: string, passwordHash: string) {
+    const reset = this.resets.find((r) => r.id === resetId && r.userId === userId && !r.usedAt)!;
+    reset.usedAt = this.now();
+    const user = (await this.users.findById(userId))!;
+    Object.assign(user, { passwordHash, failedLoginAttempts: 0, lockedUntil: null });
   }
 }

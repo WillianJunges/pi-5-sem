@@ -27,6 +27,14 @@ export interface RegisterData {
   password: string;
 }
 
+/** Resposta de POST /auth/forgot-password. */
+export interface ForgotPasswordResult {
+  message: string;
+  expiresInMinutes: number;
+  /** Simulação do e-mail: o código só vem fora de produção. */
+  code?: string;
+}
+
 async function startSession(response: AuthResponse): Promise<User> {
   await tokenStorage.save({ accessToken: response.accessToken, refreshToken: response.refreshToken });
   return response.user;
@@ -41,6 +49,16 @@ export const authService = {
     return startSession(
       await api<AuthResponse>('/auth/login', { method: 'POST', body: { email, password }, auth: false }),
     );
+  },
+
+  /** Esqueci minha senha: gera o código de 6 números. */
+  forgotPassword(email: string): Promise<ForgotPasswordResult> {
+    return api<ForgotPasswordResult>('/auth/forgot-password', { method: 'POST', body: { email }, auth: false });
+  },
+
+  /** Troca a senha com o código. Depois é só entrar com a senha nova. */
+  async resetPassword(email: string, code: string, password: string): Promise<void> {
+    await api('/auth/reset-password', { method: 'POST', body: { email, code, password }, auth: false });
   },
 
   async logout(): Promise<void> {

@@ -100,3 +100,54 @@ describe('Limite de tentativas de login (script 023)', () => {
     expect(row.locked_until).toBeNull();
   });
 });
+
+describe('Esqueci minha senha (script 024)', () => {
+  const forgot = () => request(app).post('/auth/forgot-password').send({ email: EMAIL });
+  const reset = (code: string, password = 'senha-nova') =>
+    request(app).post('/auth/reset-password').send({ email: EMAIL, code, password });
+
+  it('gera o código (só o hash vai para o banco) e troca a senha', async () => {
+    const res = await forgot();
+    expect(res.status).toBe(200);
+    expect(res.body.code).toMatch(/^\d{6}$/);
+    const [[stored]] = await admin.query<mysql.RowDataPacket[]>('SELECT code_hash FROM password_resets');
+    expect(stored.code_hash).not.toBe(res.body.code);
+
+    expect((await reset(res.body.code)).status).toBe(204);
+    expect((await login('senha-nova')).status).toBe(200);
+    expect((await login(PASSWORD)).status).toBe(401);
+  });
+
+  it('a troca tira o bloqueio, encerra as sessões e registra na auditoria', async () => {
+    const session = await login(PASSWORD);
+    for (let i = 0; i < 10; i++) await login('errada');
+    expect((await login(PASSWORD)).status).toBe(429);
+
+    const { body } = await forgot();
+    expect((await reset(body.code)).status).toBe(204);
+
+    expect((await login('senha-nova')).status).toBe(200);
+    const refresh = await request(app).post('/auth/refresh').send({ refreshToken: session.body.refreshToken });
+    expect(refresh.status).toBe(401);
+    const [audit] = await admin.query<mysql.RowDataPacket[]>(
+      "SELECT new_value FROM user_audit WHERE field = 'password'",
+    );
+    expect(audit.map((a) => a.new_value)).toEqual(['reset']);
+  });
+
+  it('código usado, antigo ou errado não troca a senha', async () => {
+    const first = (await forgot()).body.code as string;
+    const second = (await forgot()).body.code as string;
+    if (first !== second) expect((await reset(first)).status).toBe(400);
+    expect((await reset(second)).status).toBe(204);
+    expect((await reset(second, 'outra-senha')).status).toBe(400);
+  });
+
+  it('código expirado: recusa', async () => {
+    const { body } = await forgot();
+    await admin.query('UPDATE password_resets SET expires_at = UTC_TIMESTAMP() - INTERVAL 1 MINUTE');
+    const res = await reset(body.code);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/expirado/);
+  });
+});

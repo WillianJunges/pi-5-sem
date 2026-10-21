@@ -26,5 +26,10 @@ export const env = {
     accessTokenTtl: Number(process.env.JWT_ACCESS_TTL_SECONDS ?? 15 * 60),
     /** Tempo de vida do refresh token em dias (padrão: 30). */
     refreshTokenTtlDays: Number(process.env.REFRESH_TOKEN_TTL_DAYS ?? 30),
+    /**
+     * "Esqueci minha senha" sem serviço de e-mail: devolve o código na resposta para o app
+     * mostrar (simulação). Nunca em produção.
+     */
+    showResetCode: process.env.NODE_ENV !== 'production' && process.env.SHOW_RESET_CODE !== 'false',
   },
 };

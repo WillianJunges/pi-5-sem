@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { Link, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,7 +11,9 @@ import { getErrorMessage } from '../../src/utils/errors';
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
-  const [email, setEmail] = useState('');
+  /** Voltando da troca de senha: mostra o aviso e já preenche o e-mail. */
+  const params = useLocalSearchParams<{ reset?: string; email?: string }>();
+  const [email, setEmail] = useState(params.email ?? '');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   /** Login bloqueado por senhas erradas (429): mostra o aviso em destaque. */
@@ -64,6 +66,16 @@ export default function LoginScreen() {
             onSubmitEditing={handleSubmit}
           />
 
+          <Link href={{ pathname: '/forgot-password', params: { email } }} style={styles.forgot}>
+            Esqueci minha senha
+          </Link>
+
+          {params.reset && !error ? (
+            <View style={styles.successBox}>
+              <Text style={styles.lockedText}>✅ Senha alterada! Entre com a senha nova.</Text>
+            </View>
+          ) : null}
+
           {error && locked ? (
             <View style={styles.lockedBox}>
               <Text style={styles.lockedTitle}>🔒 Login bloqueado</Text>
@@ -91,6 +103,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 32, fontWeight: 'bold', color: colors.primary },
   subtitle: { fontSize: 16, color: colors.muted },
   error: { color: colors.danger },
+  forgot: { alignSelf: 'flex-end', color: colors.primary, fontWeight: '600', textDecorationLine: 'underline' },
+  successBox: { padding: spacing.md, borderRadius: 10, backgroundColor: '#F0FDF4' },
   lockedBox: { gap: spacing.xs, padding: spacing.md, borderRadius: 10, backgroundColor: '#FFF7ED' },
   lockedTitle: { fontSize: 15, fontWeight: 'bold', color: colors.text },
   lockedText: { fontSize: 14, color: colors.text },
