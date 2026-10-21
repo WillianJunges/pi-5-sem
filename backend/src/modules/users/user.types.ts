@@ -9,16 +9,26 @@ export interface User {
   passwordHash: string;
   role: Role;
   active: boolean;
+  /** Senhas erradas seguidas (database/schema/023). */
+  failedLoginAttempts: number;
+  /** Login bloqueado até esta data (null = liberado). */
+  lockedUntil: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
-/** Dados do usuário que podem ser enviados ao app (sem a senha). */
-export type PublicUser = Omit<User, 'passwordHash'>;
+/** Dados do usuário que podem ser enviados ao app (sem a senha e sem o controle de tentativas). */
+export type PublicUser = Omit<User, 'passwordHash' | 'failedLoginAttempts' | 'lockedUntil'>;
 
 export function toPublicUser(user: User): PublicUser {
-  const { passwordHash: _, ...publicUser } = user;
+  const { passwordHash: _, failedLoginAttempts: __, lockedUntil: ___, ...publicUser } = user;
   return publicUser;
+}
+
+/** Resultado de uma senha errada: o contador atualizado e, se bloqueou, até quando. */
+export interface LoginFailure {
+  failedLoginAttempts: number;
+  lockedUntil: Date | null;
 }
 
 /** Linha da view vw_users (listagem). */

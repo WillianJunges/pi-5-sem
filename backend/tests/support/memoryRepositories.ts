@@ -7,6 +7,11 @@ import type { MenusRepository } from '../../src/modules/menus/menus.repository';
 import { effectivePrice } from '../../src/modules/menus/menus.service';
 import type { Product, ProductData, ProductVariant, VariantData } from '../../src/modules/products/product.types';
 import type { ProductsRepository } from '../../src/modules/products/products.repository';
+import type { AccessLog } from '../../src/modules/access-logs/accessLog.types';
+import type { AccessLogsRepository } from '../../src/modules/access-logs/accessLogs.repository';
+import type { RefreshToken, RefreshTokensRepository } from '../../src/modules/auth/refreshTokens.repository';
+import type { CreateUserData, LoginFailure, Role, User, UserSummary } from '../../src/modules/users/user.types';
+import type { UsersRepository } from '../../src/modules/users/users.repository';
 
 /**
  * Repositórios em memória para os testes unitários: as regras de negócio são testadas
@@ -264,5 +269,89 @@ export class MemoryDeliveryFeesRepository implements DeliveryFeesRepository {
 
   async deactivate(id: string) {
     this.rows.find((r) => r.id === id)!.active = false;
+  }
+}
+
+// ---------- Autenticação (módulo base) ----------
+
+/** Usuários em memória; as tentativas de login seguem as procedures do script 023. */
+export class MemoryUsersRepository implements UsersRepository {
+  users: User[] = [];
+  constructor(private readonly now: () => Date = () => new Date()) {}
+
+  async findById(id: string) {
+    return this.users.find((u) => u.id === id) ?? null;
+  }
+  async findByEmail(email: string) {
+    return this.users.find((u) => u.email === email) ?? null;
+  }
+  async create(data: CreateUserData) {
+    const user: User = {
+      id: randomUUID(),
+      name: data.name,
+      email: data.email,
+      phone: data.phone ?? null,
+      passwordHash: data.passwordHash,
+      role: data.role,
+      active: true,
+      failedLoginAttempts: 0,
+      lockedUntil: null,
+      createdAt: this.now(),
+      updatedAt: this.now(),
+    };
+    this.users.push(user);
+    return user;
+  }
+  async list(filter: { role?: Role } = {}): Promise<UserSummary[]> {
+    return this.users
+      .filter((u) => !filter.role || u.role === filter.role)
+      .map(({ passwordHash: _, failedLoginAttempts: __, lockedUntil: ___, ...u }) => ({
+        ...u,
+        roleLabel: u.role,
+        activeSessions: 0,
+      }));
+  }
+  /** Mesma regra da sp_register_login_failure: no limite, bloqueia e zera o contador. */
+  async registerLoginFailure(id: string, maxAttempts: number, lockMinutes: number): Promise<LoginFailure> {
+    const user = this.users.find((u) => u.id === id)!;
+    if (user.failedLoginAttempts + 1 >= maxAttempts) {
+      user.lockedUntil = new Date(this.now().getTime() + lockMinutes * 60_000);
+      user.failedLoginAttempts = 0;
+    } else {
+      user.failedLoginAttempts += 1;
+    }
+    return { failedLoginAttempts: user.failedLoginAttempts, lockedUntil: user.lockedUntil };
+  }
+  async resetLoginFailures(id: string) {
+    const user = this.users.find((u) => u.id === id)!;
+    user.failedLoginAttempts = 0;
+    user.lockedUntil = null;
+  }
+}
+
+export class MemoryRefreshTokensRepository implements RefreshTokensRepository {
+  tokens: (RefreshToken & { tokenHash: string })[] = [];
+  async create(userId: string, tokenHash: string, expiresAt: Date) {
+    this.tokens.push({ id: randomUUID(), userId, tokenHash, expiresAt, revokedAt: null });
+  }
+  async findByHash(tokenHash: string) {
+    return this.tokens.find((t) => t.tokenHash === tokenHash) ?? null;
+  }
+  async revoke(id: string) {
+    const token = this.tokens.find((t) => t.id === id);
+    if (token) token.revokedAt = new Date();
+  }
+  async rotate(): Promise<string> {
+    throw new Error('não usado nos testes unitários');
+  }
+}
+
+export class MemoryAccessLogsRepository implements AccessLogsRepository {
+  logs: AccessLog[] = [];
+  async record(log: AccessLog) {
+    this.logs.push(log);
+  }
+  async listByUser(userId: string) {
+    return this.logs.filter((l) => l.user?.id === userId);
   }
 }
