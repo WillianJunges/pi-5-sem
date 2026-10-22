@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const secure = vi.hoisted(() => ({ values: new Map<string, string>(), get: vi.fn<(key: string) => Promise<string | null>>() }));
 vi.mock('expo-secure-store', () => ({
+  AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 4,
   getItemAsync: secure.get,
   setItemAsync: async (key: string, value: string) => { secure.values.set(key, value); },
   deleteItemAsync: async (key: string) => { secure.values.delete(key); },

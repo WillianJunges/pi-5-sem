@@ -25,7 +25,14 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-sqlite"
+      "expo-sqlite",
+      ["expo-location", {
+        "locationWhenInUsePermission": "Sua localização é compartilhada com o cliente durante entregas em andamento.",
+        "locationAlwaysAndWhenInUsePermission": "Permita compartilhar sua localização durante entregas em andamento, inclusive com a tela bloqueada.",
+        "isIosBackgroundLocationEnabled": true,
+        "isAndroidBackgroundLocationEnabled": true,
+        "isAndroidForegroundServiceEnabled": true
+      }]
     ]
   }
 }

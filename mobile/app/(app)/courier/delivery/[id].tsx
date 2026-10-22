@@ -15,6 +15,7 @@ import { orderStatusLabel, PAYMENT_LABEL } from '../../../../src/services/orders
 import { colors } from '../../../../src/theme';
 import { getErrorMessage } from '../../../../src/utils/errors';
 import { formatCurrency } from '../../../../src/utils/format';
+import { CourierTrackingCard } from '../../../../src/features/tracking/CourierTrackingCard';
 
 function Details({ id }: { id: string }) {
   const service = useCourierOffline();
@@ -94,6 +95,7 @@ function Details({ id }: { id: string }) {
       <Text style={styles.title}>Observações do cliente</Text>
       <Text selectable style={styles.text}>{delivery.notes}</Text>
     </View> : null}
+    {canCompleteDelivery(delivery) ? <CourierTrackingCard /> : null}
     <View style={styles.card}>
       <Text style={styles.title}>Pagamento na entrega</Text>
       <Text style={styles.text}>{PAYMENT_LABEL[delivery.paymentMethod]} · {formatCurrency(delivery.total)}</Text>

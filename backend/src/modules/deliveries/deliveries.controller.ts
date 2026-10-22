@@ -4,6 +4,7 @@ import { fromCents } from '../../shared/utils/money';
 import type { Delivery } from './delivery.types';
 import { assignDeliverySchema, completeDeliverySchema, listDeliveriesSchema } from './deliveries.schemas';
 import { deliveriesService } from './deliveries.service';
+import { trackingEvents } from '../tracking/tracking.events';
 
 /** Identidade interna e chave de idempotência não fazem parte dos detalhes da entrega. */
 export function toDeliveryResponse({ customerId: _, totalCents, changeForCents, ...delivery }: Delivery) {
@@ -34,6 +35,9 @@ export const deliveriesController = {
   },
   async complete(req: Request, res: Response) {
     const input = completeDeliverySchema.parse(req.body);
-    res.json(toDeliveryResponse(await deliveriesService.complete(req.user!, idParam(req), input)));
+    const id = idParam(req);
+    const delivery = await deliveriesService.complete(req.user!, id, input);
+    trackingEvents.changed(id);
+    res.json(toDeliveryResponse(delivery));
   },
 };

@@ -26,6 +26,7 @@ import {
 import { colors, spacing } from '../../../../src/theme';
 import { getErrorMessage } from '../../../../src/utils/errors';
 import { formatCurrency } from '../../../../src/utils/format';
+import { CustomerTrackingCard } from '../../../../src/features/tracking/CustomerTrackingCard';
 
 const formatTime = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
@@ -199,6 +200,7 @@ export default function OrderScreen() {
         ) : null}
 
         <StatusTimeline order={order} />
+        {order.fulfillment === 'DELIVERY' && order.status === 'OUT_FOR_DELIVERY' ? <CustomerTrackingCard key={order.id} orderId={order.id} /> : null}
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Itens</Text>

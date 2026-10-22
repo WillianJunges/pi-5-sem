@@ -1,8 +1,9 @@
-# Motoboy — banco, API, telas e conclusão offline
+# Motoboy — entregas, conclusão offline e rastreamento
 
 Etapa 2: logística no backend. Etapa 3: telas do motoboy e ações online.
 Etapa 4: cache SQLite, conclusão local durável e sincronização por conta.
-GPS, Socket.IO e notificações dependem das etapas seguintes.
+Etapa 5: GPS, última posição e Socket.IO, disponível para avaliação.
+Chegada ao destino e notificações de eventos dependem da etapa 6.
 
 ## Preparação
 
@@ -335,8 +336,119 @@ Roteiro adicional para a etapa de dispositivos:
 6. Simular cancelamento/reatribuição/recusa e conferir revisão explícita, sem sobrescrita.
 7. Testar falta de espaço e interrupção durante envio; nunca apresentar falso sucesso local.
 
+## Etapa 5 — rastreamento disponível para teste
+
+O motoboy ativa o compartilhamento em **Conta** ou nos detalhes de uma entrega em
+andamento. Pode escolher somente com o app aberto ou também em segundo plano.
+Permissões são solicitadas após essa escolha; segundo plano tem uma explicação
+antes de abrir o diálogo/configurações do sistema. Recusar localização não impede
+consultar, iniciar ou concluir entregas.
+
+### Alteração no banco
+
+A migration nova `027_delivery_last_locations.sql` cria `delivery_last_locations`:
+uma linha por `delivery_id`, com `sample_id`, latitude, longitude, precisão em metros,
+horário da coleta (`captured_at`) e de recebimento (`received_at`), ambos UTC com
+milissegundos. A FK aponta para `deliveries` com exclusão em cascata; constraints
+validam coordenadas e precisão. Não altera colunas existentes, MongoDB nem SQLite.
+Não cria histórico de trajetos. A última linha permanece após a conclusão para
+consistência interna, mas a API retorna `position: null` quando a entrega encerra.
+
+### Contrato e autorização
+
+| Transporte | Contrato |
+|---|---|
+| REST | `POST /deliveries/:id/location`, apenas COURIER atribuído e entrega em andamento |
+| REST | `GET /deliveries/:id/location`, OWNER, cliente dono ou COURIER atribuído |
+| Socket.IO | Autenticação por `auth: { token: accessToken }` na porta HTTP da API |
+| Socket.IO | `delivery:subscribe` recebe UUID da entrega e acknowledgment `{ ok, data }` ou `{ ok: false, status, message }` |
+| Socket.IO | `delivery:location` recebe a mesma estrutura do GET; `tracking:error` informa recusa/erro |
+| Socket.IO | `delivery:unsubscribe` remove a assinatura atual |
+
+Cada conexão acompanha uma entrega por vez, na sala `delivery:<id>`. Antes de
+entrar e **antes de cada emissão**, são revalidados JWT, conta, perfil, relação com
+o pedido e estado da entrega. Não há broadcast direto da sala sem autorização.
+O servidor também revalida a cada 5s quando o GPS não está enviando. Na conclusão
+oficial, publica estado inativo e remove a assinatura. Reconectar exige nova
+assinatura; tokens expirados podem ser renovados pelo REST existente no aplicativo.
+
+Corpo do POST:
+
+```json
+{
+  "sampleId": "53851560-e3bd-4443-97e0-fc31b49d4257",
+  "latitude": -23.088,
+  "longitude": -47.216,
+  "accuracy": 12,
+  "capturedAt": "2026-10-22T14:30:00.000Z"
+}
+```
+
+Resposta: `{ deliveryId, active, position, stale }`. `position` inclui os campos
+acima, `deliveryId` e `receivedAt`, ou é nula. O exemplo de horário deve ser
+substituído pelo instante real da coleta. O servidor rejeita idade superior a 2min,
+relógio mais de 30s no futuro e precisão acima de 100m. Retorna 429 para novas
+posições recebidas em menos de 3s. Duplicatas e posições fora de ordem devolvem a
+última posição sem fazê-la retroceder. Validação e escrita compartilham os locks
+Order → Delivery das transições, impedindo gravar GPS depois de concluir.
+
+### Mobile e ciclo de vida
+
+- Expo Location/Task Manager com precisão alta, intervalo solicitado de 10s e
+  deslocamento de 15m. São parâmetros iniciais, não frequência garantida pelo SO.
+- Com consentimento, rastreia todas as entregas em andamento presentes no cache da
+  conta. Concluir localmente remove imediatamente aquela entrega dos próximos
+  envios; se não restarem outras, desliga o coletor. A fila offline da etapa 4 é
+  consultada inclusive nos callbacks da tarefa nativa.
+- O envio usa REST vinculado à conta. Socket.IO distribui ao cliente. Isso evita
+  depender de conexão socket persistente no processo em segundo plano.
+- No foreground, usa watcher; em background, uma tarefa global nativa. No Android,
+  há serviço de localização com aviso persistente; no iOS, indicador de localização.
+- Não acumula trajetos offline. Um lote nativo usa apenas a coleta mais recente;
+  dados antigos/imprecisos ou marcados como simulados pelo aparelho são descartados.
+  Esse filtro não é uma garantia antifraude.
+- Logout/desativação param o coletor e retiram a autorização local. Troca de conta,
+  perda de atribuição, recusa de acesso e conclusão remota são reconciliadas sem
+  enviar posições com credenciais de outra conta.
+- No iOS, credenciais e autorização de rastreamento usam Keychain deste aparelho
+  acessível após o primeiro desbloqueio. Ativar background atualiza também sessões
+  antigas; isso permite autenticação com a tela bloqueada, sem mover tokens ao SQLite.
+
+No pedido do cliente, durante OUT_FOR_DELIVERY, o painel recebe atualizações
+automaticamente, mostra horário e precisão, identifica posição sem atualização
+recente e permite abrir a última coordenada em mapa externo. O hook
+`useDeliveryTracking` fornece a posição para a integração do mapa interno do
+Willian, responsabilidade indicada na especificação. Este protótipo não acrescenta
+mapa nativo interno nem cálculo de rotas. REST inicial, reconexão e consulta de
+recuperação a cada 15s funcionam apenas com a tela em foco e app ativo.
+
+### Preparação e limites do teste
+
+Veja [teste-etapa5.md](teste-etapa5.md) para comandos e critérios de revisão.
+O `app.json` inclui permissões e plugin de localização. **É necessário gerar e
+instalar um novo build nativo**; apenas atualizar JavaScript/Expo Go não valida
+segundo plano ou tela bloqueada. Não foram executados testes em aparelho nesta
+etapa. Encerramento forçado, economia de bateria e restrições do fabricante podem
+interromper a tarefa; não se promete rastreamento com o processo encerrado.
+
+O servidor Socket.IO atual usa uma única instância, sem adaptador distribuído.
+Múltiplas instâncias exigirão distribuição de eventos/salas e configuração do
+balanceador. Nenhum deploy foi realizado nesta etapa.
+
+### Evidências desta versão
+
+Instalações pelo lockfile, checagens TypeScript e build backend passaram. Os 161
+testes unitários backend e 36 de integração de entregas/rastreamento passaram,
+incluindo MySQL, HTTP e Socket.IO reais. A suíte mobile passou com 95 testes:
+os anteriores mais política de coleta, permissões/lifecycle simulados, isolamento
+de contas e revogação pelo GPS concorrendo com leitura do cache.
+
+Exportação Android/Hermes e inspeção da configuração nativa passaram. A migration
+027 foi aplicada e repetida no banco local sem duplicação. Nenhum desses resultados
+substitui GPS/background/tela bloqueada em telefone: esses cenários permanecem sem
+execução real e têm roteiro explícito para revisão.
+
 ## Próximas etapas — aguardam aprovação
 
-5. Localização: Expo Location/Task Manager, persistência de posição e Socket.IO autorizado.
 6. Chegada e notificações: proximidade local, eventos e dispositivos push.
 7. Validação em dispositivos reais e documentação das limitações observadas.

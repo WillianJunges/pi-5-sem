@@ -1,5 +1,7 @@
 /** Etapa 2: requisições HTTP e transações MySQL reais, sempre em marmitaria_test. */
 import { randomUUID } from 'node:crypto';
+import { createServer } from 'node:http';
+import { io as clientIo, type Socket } from 'socket.io-client';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import mysql, { type RowDataPacket } from 'mysql2/promise';
@@ -12,6 +14,8 @@ import { signAccessToken } from '../../src/modules/auth/tokens';
 import type { DeliveryStatus } from '../../src/modules/deliveries/delivery.types';
 import type { OrderStatus } from '../../src/modules/orders/order.types';
 import type { Role } from '../../src/modules/users/user.types';
+import { attachTracking } from '../../src/modules/tracking/tracking.socket';
+import type { TrackingView } from '../../src/modules/tracking/tracking.schemas';
 
 const identities = {
   owner: { id: randomUUID(), role: 'OWNER' },
@@ -82,6 +86,8 @@ beforeAll(async () => {
     preserved: preserved.map(row => oldOrders.get(row.id) === 'PICKUP' ? 'PICKUP' : row.status).sort(),
     countAfterRepeat: count.n,
   };
+  await sqlFile('027_delivery_last_locations.sql');
+  await sqlFile('027_delivery_last_locations.sql');
 });
 
 beforeEach(async () => {
@@ -100,6 +106,9 @@ const ownerAction = (id: string, action: string) => request(app).post(`/owner/or
 const assign = (id: string, courier: Identity = 'courier', by: Identity = 'owner') => request(app).post(`/owner/deliveries/${id}/assign`).set(auth(by)).send({ courierId: identities[courier].id });
 const start = (id: string, by: Identity = 'courier') => request(app).patch(`/deliveries/${id}/start`).set(auth(by));
 const completion = (): { operationId: string; completedAt: string } => ({ operationId: randomUUID(), completedAt: new Date().toISOString() });
+const point = (offset = 0) => ({ sampleId: randomUUID(), latitude: -23.088, longitude: -47.216, accuracy: 12, capturedAt: new Date(Date.now() + offset).toISOString() });
+const postPoint = (id: string, input = point(), by: Identity = 'courier') => request(app).post(`/deliveries/${id}/location`).set(auth(by)).send(input);
+const getPoint = (id: string, by: Identity = 'customer') => request(app).get(`/deliveries/${id}/location`).set(auth(by));
 const complete = (id: string, input = completion(), by: Identity = 'courier') => request(app).post(`/deliveries/${id}/complete`).set(auth(by)).send(input);
 
 async function delivery(ready = true): Promise<{ id: string; orderId: string }> {
@@ -335,5 +344,111 @@ describe('Cancelamento coordenado', () => {
     expect((await ownerAction(id, 'cancel')).status).toBe(200);
     const [[row]] = await admin.query<RowDataPacket[]>('SELECT COUNT(*) AS n FROM deliveries WHERE order_id = ?', [id]);
     expect(row.n).toBe(0);
+  });
+});
+
+describe('Etapa 5: posição atual, HTTP e Socket.IO reais', () => {
+  const server = createServer(app);
+  const sockets = attachTracking(server);
+  const clients: Socket[] = [];
+  let url: string;
+  beforeAll(async () => {
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Servidor de testes indisponível');
+    url = `http://127.0.0.1:${address.port}`;
+  });
+  afterAll(async () => { for (const client of clients) client.disconnect(); await new Promise<void>(resolve => sockets.close(() => resolve())); });
+  async function connect(who: Identity) {
+    const client = clientIo(url, { auth: { token: auth(who).Authorization.slice(7) }, reconnection: false, autoConnect: false });
+    clients.push(client);
+    await new Promise<void>((resolve, reject) => { client.once('connect', resolve); client.once('connect_error', reject); client.connect(); });
+    return client;
+  }
+  async function subscribed(client: Socket, id: string) {
+    return client.timeout(2000).emitWithAck('delivery:subscribe', id) as Promise<{ ok: boolean; status?: number; data?: TrackingView }>;
+  }
+  async function running() { const d = await delivery(); await assign(d.id); await start(d.id); return d; }
+  function event<T>(client: Socket, name: string): Promise<T> {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => { client.off(name, receive); reject(new Error(`Sem evento ${name}`)); }, 3000);
+      function receive(data: T) { clearTimeout(timeout); resolve(data); }
+      client.once(name, receive);
+    });
+  }
+  it('aceita apenas motoboy atribuído e dados válidos, com sessão', async () => {
+    const d = await running();
+    expect((await request(app).post(`/deliveries/${d.id}/location`).send(point())).status).toBe(401);
+    expect((await postPoint(d.id, point(), 'customer')).status).toBe(403);
+    expect((await postPoint(d.id, point(), 'otherCourier')).status).toBe(404);
+    for (const input of [{ ...point(), latitude: 91 }, { ...point(), longitude: -181 }, { ...point(), accuracy: 101 }, { ...point(), courierId: identities.courier.id }]) {
+      expect((await postPoint(d.id, input)).status).toBe(400);
+    }
+    expect((await getPoint(d.id)).body.position).toBeNull();
+  });
+  it('persiste uma única posição e devolve somente aos participantes', async () => {
+    const d = await running(); const input = point();
+    expect((await postPoint(d.id, input)).status).toBe(200);
+    for (const who of ['customer', 'owner', 'courier'] as const) expect((await getPoint(d.id, who)).body.position).toMatchObject(input);
+    for (const who of ['otherCustomer', 'otherCourier'] as const) expect((await getPoint(d.id, who)).status).toBe(404);
+    const [[row]] = await admin.query<RowDataPacket[]>('SELECT COUNT(*) AS n FROM delivery_last_locations WHERE delivery_id = ?', [d.id]);
+    expect(row.n).toBe(1);
+  });
+  it('rejeita posições velhas, futuras ou após o encerramento', async () => {
+    const d = await running();
+    expect((await postPoint(d.id, point(-130_000))).status).toBe(422);
+    expect((await postPoint(d.id, point(40_000))).status).toBe(422);
+    await postPoint(d.id); await complete(d.id);
+    expect((await postPoint(d.id)).status).toBe(409);
+    expect((await getPoint(d.id)).body).toMatchObject({ active: false, position: null });
+  });
+  it('descarta duplicatas e posições fora de ordem, limitando frequência', async () => {
+    const d = await running(); const input = point(); await postPoint(d.id, input);
+    expect((await postPoint(d.id, input)).body.position.sampleId).toBe(input.sampleId);
+    expect((await postPoint(d.id, point(-1000))).body.position.sampleId).toBe(input.sampleId);
+    expect((await postPoint(d.id, point(1000))).status).toBe(429);
+  });
+  it('marca posição sem atualização como antiga', async () => {
+    const d = await running(); await postPoint(d.id);
+    await admin.query('UPDATE delivery_last_locations SET captured_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 3 MINUTE) WHERE delivery_id = ?', [d.id]);
+    expect((await getPoint(d.id)).body.stale).toBe(true);
+  });
+  it('não publica antes do início, nem para entrega cancelada', async () => {
+    const d = await delivery(); await assign(d.id);
+    expect((await postPoint(d.id)).status).toBe(409);
+    await ownerAction(d.orderId, 'cancel');
+    expect((await postPoint(d.id)).status).toBe(409);
+  });
+  it('Socket.IO entrega posição inicial e atualização ao cliente autorizado', async () => {
+    const d = await running(); const client = await connect('customer');
+    expect(await subscribed(client, d.id)).toMatchObject({ ok: true, data: { active: true, position: null } });
+    const updated = event<TrackingView>(client, 'delivery:location');
+    const input = point(); await postPoint(d.id, input);
+    expect((await updated).position).toMatchObject(input);
+    client.disconnect();
+  });
+  it('Socket.IO recusa sala de outro cliente e token inválido', async () => {
+    const d = await running(); const client = await connect('otherCustomer');
+    expect(await subscribed(client, d.id)).toMatchObject({ ok: false, status: 404 });
+    client.disconnect();
+    const invalid = clientIo(url, { auth: { token: 'invalid' }, reconnection: false, autoConnect: false }); clients.push(invalid);
+    const failed = event<Error>(invalid, 'connect_error'); invalid.connect();
+    expect((await failed).message).toBe('Sessão inválida'); invalid.disconnect();
+  });
+  it('revalida desativação antes de emitir e remove a sala', async () => {
+    const d = await running(); const client = await connect('customer'); await subscribed(client, d.id);
+    await admin.query('UPDATE users SET active = 0 WHERE id = ?', [identities.customer.id]);
+    const denied = event<{ status: number }>(client, 'tracking:error');
+    const leaked: unknown[] = []; client.on('delivery:location', value => leaked.push(value));
+    await postPoint(d.id); expect((await denied).status).toBe(403); expect(leaked).toEqual([]);
+    client.disconnect();
+  });
+  it('concluir uma entre duas entregas encerra só o canal correspondente', async () => {
+    const a = await running(); const b = await running();
+    await postPoint(a.id); await postPoint(b.id);
+    const client = await connect('customer'); await subscribed(client, a.id);
+    const ended = event<TrackingView>(client, 'delivery:location'); await complete(a.id);
+    expect(await ended).toMatchObject({ deliveryId: a.id, active: false, position: null });
+    expect((await getPoint(b.id)).body.active).toBe(true); client.disconnect();
   });
 });

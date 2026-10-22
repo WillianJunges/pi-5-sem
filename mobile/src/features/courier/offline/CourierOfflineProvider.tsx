@@ -8,6 +8,7 @@ import { accessTokenUserId } from '../../../services/sessionTokens';
 import { tokenStorage } from '../../../services/tokenStorage';
 import { courierStorage } from './nativeStorage';
 import { CourierOfflineService } from './service';
+import { courierAccessChanges } from './accessChanges';
 
 const Context = createContext<CourierOfflineService | null>(null);
 
@@ -26,6 +27,9 @@ export function CourierOfflineProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!service) return;
+    const access = courierAccessChanges.subscribe(async event => {
+      if (event.userId === service.userId) await service.rejectAccess(event.status, event.deliveryId);
+    });
     const foreground = () => AppState.currentState === 'active' || AppState.currentState == null;
     service.setForeground(foreground());
     const unsubscribe = NetInfo.addEventListener(state => {
@@ -35,7 +39,7 @@ export function CourierOfflineProvider({ children }: { children: ReactNode }) {
     void service.activate();
     // O SO não garante execução com o app fechado; o banco preserva a intenção até reabrir.
     const timer = setInterval(() => void service.sync(), 20_000);
-    return () => { service.deactivate(); clearInterval(timer); unsubscribe(); app.remove(); };
+    return () => { access(); service.deactivate(); clearInterval(timer); unsubscribe(); app.remove(); };
   }, [service]);
 
   return <Context.Provider value={service}>{children}</Context.Provider>;

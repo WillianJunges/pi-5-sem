@@ -59,6 +59,12 @@ export class CourierOfflineService implements DeliveriesGateway {
     catch (error) { this.update({ error, ready: true }); }
   }
   deactivate() { this.enabled = false; }
+  /** Também invalida leituras em voo quando outro recurso (GPS) recebe a recusa. */
+  async rejectAccess(status: 403 | 404, id: string) {
+    const error = new CourierLocalError('O acesso à entrega mudou. Consulte novamente.', status);
+    await this.rejectedRead(error, id);
+    this.update({ error });
+  }
   setForeground(value: boolean) { this.foreground = value; if (value) void this.sync(true); }
   setOnline(value: boolean) {
     const recovered = !this.state.online && value;

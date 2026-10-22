@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { CourierOfflineProvider } from '../src/features/courier/offline/CourierOfflineProvider';
+import { CourierTrackingProvider } from '../src/features/tracking/CourierTrackingProvider';
 import { colors } from '../src/theme';
 
 function RootNavigator() {
@@ -33,8 +34,10 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <CourierOfflineProvider>
-        <StatusBar style="dark" />
-        <RootNavigator />
+        <CourierTrackingProvider>
+          <StatusBar style="dark" />
+          <RootNavigator />
+        </CourierTrackingProvider>
       </CourierOfflineProvider>
     </AuthProvider>
   );

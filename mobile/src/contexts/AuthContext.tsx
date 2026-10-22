@@ -2,6 +2,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import { ApiError, onSessionExpired } from '../services/api';
 import { authService, type RegisterData, type User } from '../services/auth.service';
 import { usersService } from '../services/users.service';
+import { stopCourierTracking } from '../features/tracking/nativeTracking';
 
 interface AuthContextValue {
   /** Usuário logado, ou null se não houver sessão. */
@@ -27,6 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    await stopCourierTracking();
     await authService.logout();
     await setUser(null);
   }, [setUser]);

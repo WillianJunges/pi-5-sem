@@ -6,6 +6,7 @@ import { useAuth } from '../../../../src/contexts/AuthContext';
 import { courierStyles as styles } from '../../../../src/features/courier/components';
 import { getErrorMessage } from '../../../../src/utils/errors';
 import { useCourierOffline } from '../../../../src/features/courier/offline/CourierOfflineProvider';
+import { CourierTrackingCard } from '../../../../src/features/tracking/CourierTrackingCard';
 
 export default function CourierAccount() {
   const { user, signOut } = useAuth();
@@ -26,6 +27,7 @@ export default function CourierAccount() {
     <Text style={styles.title}>{user.name}</Text>
     <Text style={styles.text}>{user.email}</Text>
     <Text style={styles.muted}>Motoboy</Text>
+    <CourierTrackingCard />
     <Pressable accessibilityRole="button" onPress={() => router.push('/profile')} style={styles.card}>
       <Text style={styles.link}>Meu perfil ›</Text>
     </Pressable>

@@ -195,6 +195,17 @@ describe('Sincronização e conflitos', () => {
     resume(); await outcome;
     expect(await store.isBlocked('a')).toBe(true);
   });
+  it.each([403, 404] as const)('recusa %s recebida pelo GPS invalida consulta de entrega em voo', async status => {
+    const { store } = storage(); await store.save('a', [delivery()]); const remote = api();
+    let entered!: () => void; const started = new Promise<void>(resolve => { entered = resolve; });
+    let respond!: (value: Delivery) => void; const answer = new Promise<Delivery>(resolve => { respond = resolve; });
+    remote.get.mockImplementationOnce(async () => { entered(); return answer; });
+    const worker = service(store, remote); const reading = worker.sync.get('d1');
+    const rejected = expect(reading).rejects.toMatchObject({ code: 'access_changed' });
+    await started; await worker.sync.rejectAccess(status, 'd1'); respond(delivery()); await rejected;
+    if (status === 403) expect(await store.isBlocked('a')).toBe(true);
+    else expect(await store.get('a', 'd1')).toBeNull();
+  });
   it('logout/troca de conta interrompe novas requisições e preserva a fila original', async () => {
     const { store } = storage(); await store.save('a', [delivery()]); await store.enqueue('a', 'd1', operation());
     const worker = service(store); worker.switchAccount('b'); await worker.sync.activate(); worker.sync.deactivate();
