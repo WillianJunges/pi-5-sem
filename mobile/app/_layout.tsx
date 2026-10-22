@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { CourierOfflineProvider } from '../src/features/courier/offline/CourierOfflineProvider';
 import { CourierTrackingProvider } from '../src/features/tracking/CourierTrackingProvider';
 import { colors } from '../src/theme';
+import { NotificationsProvider } from '../src/features/notifications/NotificationsProvider';
 
 function RootNavigator() {
   const { user, loading } = useAuth();
@@ -37,6 +38,7 @@ export default function RootLayout() {
         <CourierTrackingProvider>
           <StatusBar style="dark" />
           <RootNavigator />
+          <NotificationsProvider>{null}</NotificationsProvider>
         </CourierTrackingProvider>
       </CourierOfflineProvider>
     </AuthProvider>

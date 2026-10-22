@@ -3,7 +3,7 @@
 Etapa 2: logística no backend. Etapa 3: telas do motoboy e ações online.
 Etapa 4: cache SQLite, conclusão local durável e sincronização por conta.
 Etapa 5: GPS, última posição e Socket.IO, disponível para avaliação.
-Chegada ao destino e notificações de eventos dependem da etapa 6.
+Etapa 6: chegada local e integração de notificações; push real aguarda configuração Expo/FCM.
 
 ## Preparação
 
@@ -448,7 +448,138 @@ Exportação Android/Hermes e inspeção da configuração nativa passaram. A mi
 substitui GPS/background/tela bloqueada em telefone: esses cenários permanecem sem
 execução real e têm roteiro explícito para revisão.
 
-## Próximas etapas — aguardam aprovação
+## Etapa 6 — chegada e notificações
 
-6. Chegada e notificações: proximidade local, eventos e dispositivos push.
+O cartão **Notificações**, na Conta do motoboy, permite ativar separadamente alertas
+locais de chegada e avisos remotos de pedidos. O cliente também tem o controle de
+avisos de pedidos. Permissão de notificação é solicitada somente por uma ação explícita;
+negá-la não bloqueia GPS ou ações logísticas.
+
+### Chegada ao destino
+
+A tarefa GPS já existente avalia proximidade **antes do envio HTTP**, inclusive sem
+rede. O raio inicial é 100m: distância calculada por Haversine mais a margem de precisão
+deve caber nesse raio. Exige precisão até 40m, coleta de no máximo 30s e duas amostras
+válidas separadas por pelo menos 5s, sem intervalo superior a 60s. Amostras antigas,
+fora de ordem, simuladas ou sem precisão adequada não disparam o aviso. Os parâmetros
+precisam ser ajustados por ensaio real, principalmente em prédios e áreas com sinal ruim.
+
+O aviso é **“Você chegou ao destino. O pedido foi entregue?”**. Tocar abre os detalhes;
+a ação existente ainda pede confirmação explícita e pode usar a conclusão offline.
+Nenhuma distância, push ou toque isolado conclui a entrega.
+
+O SQLite `courier-deliveries.db` migra de `user_version=1` para `2`, preservando cache
+e fila existentes. `courier_arrivals` mantém candidato, última amostra, UUID do evento,
+reserva de 30s e confirmação de alerta, por usuário/entrega. `notification_inbox`
+deduplica apresentação em foreground e abertura por toque, separadamente. Não armazena
+trajetos, senhas, tokens ou conteúdo privado de push. Uma reserva interrompida pode
+ser recuperada; falha nativa de agendamento libera nova tentativa com o mesmo evento.
+O identificador nativo determinístico também reduz repetições; avisos continuam sujeitos
+às garantias do sistema operacional.
+
+Cada entrega tem seu controle. Conclusão offline exclui o alvo mesmo antes do servidor
+confirmar e remove alertas locais apresentados/agendados na reconciliação. Encerrar a
+última entrega desliga o GPS; encerrar uma entre duas mantém a outra. Cancelamento,
+revogação e troca de conta não autorizam avisos sobre dados da sessão anterior.
+
+### Migration MySQL 028
+
+`028_delivery_notifications.sql` acrescenta apenas três tabelas e um trigger adicional:
+
+| Tabela | Campos e garantias principais |
+|---|---|
+| `push_devices` | UUID de instalação, hash do segredo, usuário/token/plataforma, versão de vínculo, ativo e datas; token único e FK de usuário |
+| `delivery_notification_events` | UUID, sequência monotônica, entrega, destinatário, tipo e data; FKs e índice para reconhecer evento substituído |
+| `push_notification_attempts` | Evento/dispositivo/versão, estado, contadores, próxima tentativa, lease, ticket e código resumido; UNIQUE evento/dispositivo |
+
+Usuário, token e plataforma podem ser nulos em um **tombstone de revogação**: ele
+impede que o primeiro registro, atrasado na rede, reative uma instalação já desativada.
+Nenhum registro existente de pedidos, entregas, localização ou MongoDB é reescrito.
+
+`trg_deliveries_notifications`, AFTER UPDATE, registra somente mudanças efetivas:
+
+| Mudança | Evento/destinatário |
+|---|---|
+| Atribuir motoboy | ASSIGNED para o novo motoboy |
+| Trocar motoboy | UNASSIGNED para o anterior e ASSIGNED para o novo |
+| Cancelar entrega atribuída | CANCELLED para o motoboy vinculado |
+| Iniciar entrega | OUT_FOR_DELIVERY para o cliente do pedido |
+
+O evento participa da transação, inclusive no cancelamento iniciado pelo trigger
+de `orders`. Falhar ao gravar o evento desfaz a mudança. Reenvios idempotentes não
+produzem eventos novos; a migration não inventa avisos históricos.
+
+### Dispositivos e sessão
+
+`PUT /notifications/device` exige JWT, conta ativa e perfil CUSTOMER ou COURIER.
+Corpo: `{ installationId, installationKey, bindingVersion, token, platform }`, com
+UUID, segredo aleatório de 32 bytes em hexadecimal, versão inteira positiva,
+ExpoPushToken/ExponentPushToken e `android` ou `ios`. A conta vem da sessão.
+Retorna 204; conflito de instalação, token ou versão retorna 409. O segredo só fica
+no SecureStore do aparelho; o backend persiste SHA-256, sem registrar valores em logs.
+
+`POST /notifications/device/revoke` recebe apenas instalação, segredo e versão;
+retorna 204 sem revelar existência do dispositivo. Esse endpoint usa uma capacidade
+secreta de **desativação**, em vez do JWT antigo, permitindo sincronizar logout offline
+depois que a sessão expirar. Não permite consultar, registrar ou ativar dispositivo.
+Só uma versão igual ou mais recente, com segredo correto, desativa o vínculo. Logout
+antigo não afeta um vínculo novo; registro atrasado na mesma versão revogada é recusado.
+
+O aplicativo persiste vínculo/revogações no SecureStore antes da rede. Retoma ao abrir,
+recuperar conexão e a cada 30s em foreground. Revogações pendentes são processadas
+antes de novos registros. Login de outra conta exige nova ativação; token atualizado
+é reconciliado sem pedir permissão novamente. Em logout, suprime ações locais da
+sessão e tenta limpar avisos do aparelho. Aviso genérico já em trânsito pode aparecer
+no sistema enquanto offline: o toque sempre revalida conta e entrega.
+
+Payload: `{ version:1, eventId, userId, deliveryId, orderId, type }`, sem endereço,
+telefone, coordenadas ou rota arbitrária. Ao receber em foreground, o app consulta a
+lista oficial; ao tocar, consulta a entrega antes de navegar. Só o aviso local ARRIVAL
+pode usar contexto offline validado e sem conclusão pendente. Um push remoto sem rede
+pede nova consulta. Dados de outra conta, entrega divergente ou sessão alterada durante
+a resposta são recusados. Nunca há transição de estado a partir do payload.
+
+### Worker e limites de entrega
+
+O worker é ativado por `EXPO_PUSH_ENABLED=true` no backend; o padrão é desligado.
+`EXPO_ACCESS_TOKEN` é opcional, para projetos que protegem o serviço Expo Push.
+Ele materializa eventos confirmados para aparelhos vinculados antes do evento,
+revalida conta/perfil/vínculo/versão e estado atual imediatamente antes de enviar,
+descarta avisos substituídos ou com mais de 24h e não envia notificações históricas
+ao registrar um aparelho novo.
+
+Processa até 20 trabalhos por ciclo de 5s, com lease persistente de 60s e recuperação
+de interrupções. Erros transitórios têm espera exponencial; cada fase permite até
+8 tentativas e respeita o prazo de 24h. Após um ticket aceito, consulta recibo em 15min
+e repete consultas ainda pendentes. `DeviceNotRegistered` desativa somente a versão
+rejeitada; erro de credencial não apaga o token do cliente. Códigos de erro não incluem
+tokens/segredos. Tentativas FAILED/SKIPPED ficam disponíveis para inspeção no banco.
+
+`TICKET` significa aceite inicial do Expo. `DELIVERED` na tabela de tentativas significa
+recibo positivo do provedor, **não comprovação de exibição ou leitura no telefone**.
+Consulta de recibo não envia mensagem nova e pode continuar depois de mudar o estado
+da entrega. Não há promessa de recebimento exatamente uma vez: resposta perdida pode
+produzir push duplicado; o app deduplica os identificadores que consegue observar.
+
+### Configuração e validação
+
+Veja [teste-etapa6.md](teste-etapa6.md). Estão implementados transporte Expo, controles
+locais, registro e filas, mas faltam `android.package`, EAS `projectId`, configuração
+Firebase e credenciais FCM v1 para o projeto real. Nada foi inventado nem enviado a
+uma conta externa. É preciso novo build nativo; Expo Go/exportação JavaScript não
+comprovam notificações com tela bloqueada.
+
+Os testes usam MySQL/HTTP/Socket.IO e SQLite reais, com transporte push e ponte de
+notificações simulados. Nenhuma notificação foi comprovada em aparelho nesta etapa.
+As limitações de background, bateria e precisão da etapa 5 continuam pendentes.
+
+Nesta versão passaram: instalação mobile pelo lockfile, checagens TypeScript,
+build backend, 172 testes unitários backend, 46 de integração de entregas e 124
+testes mobile. A exportação Android/Hermes e a inspeção de configuração nativa
+também passaram. A migration 028 foi aplicada no banco local e uma segunda execução
+confirmou que já estava atualizado. O worker local permanece desligado, sem envio
+de pushes externos e sem deploy.
+
+## Próxima etapa — aguarda aprovação
+
 7. Validação em dispositivos reais e documentação das limitações observadas.

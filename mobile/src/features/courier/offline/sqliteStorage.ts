@@ -1,5 +1,6 @@
 import type { Delivery, DeliveryCompletion } from '../../../services/deliveries.service';
 import { CourierLocalError, type CourierDatabase, type CourierLocalStorage, type PendingCompletion } from './types';
+import { nextArrival,type ArrivalState,type ArrivalClaim } from '../../notifications/arrivalPolicy';
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS courier_cache (
@@ -19,6 +20,20 @@ const SCHEMA = `
   PRAGMA user_version = 1;
 `;
 interface CacheRow { data: string }
+const NOTIFICATIONS_SCHEMA=`
+  CREATE TABLE IF NOT EXISTS courier_arrivals (
+    user_id TEXT NOT NULL,delivery_id TEXT NOT NULL,event_id TEXT NOT NULL,
+    first_near_at INTEGER NOT NULL,last_sample_at INTEGER NOT NULL,near_count INTEGER NOT NULL,
+    notified_at INTEGER,lease_id TEXT,lease_until INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY(user_id,delivery_id)
+  );
+  CREATE TABLE IF NOT EXISTS notification_inbox (
+    user_id TEXT NOT NULL,event_id TEXT NOT NULL,seen INTEGER NOT NULL DEFAULT 0,opened INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY(user_id,event_id)
+  );
+  PRAGMA user_version=2;
+`;
+interface ArrivalRow { event_id:string;first_near_at:number;last_sample_at:number;near_count:number;notified_at:number|null;lease_id:string|null;lease_until:number }
 interface PendingRow {
   user_id: string; delivery_id: string; order_id: string; operation_id: string; completed_at: string;
   status: PendingCompletion['status']; attempts: number; next_attempt_at: number;
@@ -41,8 +56,9 @@ export class SqliteCourierStorage implements CourierLocalStorage {
     this.opening ??= this.open().then(async db => {
       await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;');
       const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
-      if ((row?.user_version ?? 0) > 1) throw new Error('Versão local incompatível');
+      if ((row?.user_version ?? 0) > 2) throw new Error('Versão local incompatível');
       if ((row?.user_version ?? 0) < 1) await db.withExclusiveTransactionAsync(async tx => tx.execAsync(SCHEMA));
+      if ((row?.user_version ?? 0) < 2) await db.withExclusiveTransactionAsync(async tx => tx.execAsync(NOTIFICATIONS_SCHEMA));
       return db;
     }).catch(error => { this.opening = null; throw error; });
     return this.opening;
@@ -178,5 +194,45 @@ export class SqliteCourierStorage implements CourierLocalStorage {
   retry(userId: string, id?: string): Promise<void> {
     return this.serial(async db => { await db.runAsync(`UPDATE courier_completions SET status = 'pending', next_attempt_at = 0, message = NULL
       WHERE user_id = ? ${id ? 'AND delivery_id = ?' : "AND status = 'pending'"}`, userId, ...(id ? [id] : [])); });
+  }
+
+  /** Reserva durável; a conclusão offline e a elegibilidade são verificadas na mesma transação. */
+  recordArrival(userId:string,id:string,sampleAt:number,near:boolean,now:number,uuid:string):Promise<ArrivalClaim|null> {
+    return this.serial(async db=>{
+      let claim:ArrivalClaim|null=null;
+      await db.withExclusiveTransactionAsync(async tx=>{
+        if(await tx.getFirstAsync('SELECT user_id FROM courier_accounts WHERE user_id=? AND blocked=1',userId)) return;
+        if(await tx.getFirstAsync('SELECT user_id FROM courier_completions WHERE user_id=? AND delivery_id=?',userId,id)) return;
+        const cached=await tx.getFirstAsync<CacheRow>('SELECT data FROM courier_cache WHERE user_id=? AND delivery_id=?',userId,id);
+        if(!cached) return;
+        const delivery=this.decode(userId,cached);
+        if(delivery.status!=='IN_PROGRESS'||delivery.orderStatus!=='OUT_FOR_DELIVERY') return;
+        const row=await tx.getFirstAsync<ArrivalRow>('SELECT * FROM courier_arrivals WHERE user_id=? AND delivery_id=?',userId,id);
+        const previous:ArrivalState|null=row?{eventId:row.event_id,firstNearAt:row.first_near_at,lastSampleAt:row.last_sample_at,nearCount:row.near_count,
+          notifiedAt:row.notified_at,leaseId:row.lease_id,leaseUntil:row.lease_until}:null;
+        const state=nextArrival(previous,sampleAt,near,uuid);
+        if(near&&sampleAt> (previous?.lastSampleAt??0)&&state.nearCount>=2&&state.notifiedAt===null&&state.leaseUntil<=now) {
+          state.leaseId=uuid;state.leaseUntil=now+30_000;
+          claim={userId,deliveryId:id,orderId:delivery.orderId,eventId:state.eventId,leaseId:uuid};
+        }
+        await tx.runAsync(`INSERT INTO courier_arrivals (user_id,delivery_id,event_id,first_near_at,last_sample_at,near_count,notified_at,lease_id,lease_until)
+          VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,delivery_id) DO UPDATE SET first_near_at=excluded.first_near_at,last_sample_at=excluded.last_sample_at,
+          near_count=excluded.near_count,notified_at=excluded.notified_at,lease_id=excluded.lease_id,lease_until=excluded.lease_until`,
+        userId,id,state.eventId,state.firstNearAt,state.lastSampleAt,state.nearCount,state.notifiedAt,state.leaseId,state.leaseUntil);
+      });return claim;
+    });
+  }
+  finishArrival(claim:ArrivalClaim,success:boolean,now:number):Promise<void> {
+    return this.serial(async db=>{await db.runAsync(`UPDATE courier_arrivals SET notified_at=?,lease_id=NULL,lease_until=0
+      WHERE user_id=? AND delivery_id=? AND lease_id=?`,success?now:null,claim.userId,claim.deliveryId,claim.leaseId);});
+  }
+  claimNotification(userId:string,eventId:string,column:'seen'|'opened'):Promise<boolean> {
+    return this.serial(async db=>{
+      let accepted=false;
+      await db.withExclusiveTransactionAsync(async tx=>{
+        await tx.runAsync('INSERT OR IGNORE INTO notification_inbox (user_id,event_id) VALUES (?,?)',userId,eventId);
+        accepted=(await tx.runAsync(`UPDATE notification_inbox SET ${column}=1 WHERE user_id=? AND event_id=? AND ${column}=0`,userId,eventId)).changes>0;
+      });return accepted;
+    });
   }
 }

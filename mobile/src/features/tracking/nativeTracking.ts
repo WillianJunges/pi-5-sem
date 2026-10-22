@@ -9,6 +9,7 @@ import { tokenStorage } from '../../services/tokenStorage';
 import { accessTokenUserId } from '../../services/sessionTokens';
 import { courierStorage } from '../courier/offline/nativeStorage';
 import { courierAccessChanges } from '../courier/offline/accessChanges';
+import { processArrival,reconcileArrivalAlerts,clearArrivalAlerts } from '../notifications/nativeNotifications';
 import { PositionSender, trackingTargets, type PositionFix } from './policy';
 
 const TASK = 'courier-active-delivery-location-v1';
@@ -79,6 +80,8 @@ async function receive(locations: Location.LocationObject[]) {
       () => Crypto.randomUUID(),
     ) };
     const fix: PositionFix = { ...latest.coords, timestamp: latest.timestamp, mocked: latest.mocked };
+    // Proximidade é local: falha de rede ou notificação não interrompe o compartilhamento GPS.
+    try{await processArrival(config.userId,fix);}catch{/* Permissão/armazenamento serão conferidos na próxima coleta. */}
     const count = await sender.sender.update(fix);
     if (count) update({ message: null });
     if (!(await targets(config.userId)).length) await reconcileTracking();
@@ -104,6 +107,7 @@ export function stopCourierTracking(): Promise<void> {
     await SecureStore.deleteItemAsync(SETTINGS);
     sender = null;
     await stopCollectors();
+    await clearArrivalAlerts().catch(()=>undefined);
     update({ mode: null, collecting: false, targets: 0, message: null });
   });
 }
@@ -114,6 +118,7 @@ export function reconcileTracking(): Promise<void> {
       await SecureStore.deleteItemAsync(SETTINGS); config = null; sender = null; authorizationRevision++;
     }
     const ids = config ? await targets(config.userId) : [];
+    if(config)await reconcileArrivalAlerts(config.userId).catch(()=>undefined);
     if (!config || !ids.length) {
       await stopCollectors();
       update({ mode: config?.mode ?? null, collecting: false, targets: 0 });

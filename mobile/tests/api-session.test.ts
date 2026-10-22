@@ -20,6 +20,15 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('API vinculada à conta da conclusão', () => {
+  it('resposta 204 de registro de dispositivo também recusa sessão alterada', async () => {
+    const { tokenStorage } = await import('../src/services/tokenStorage'); await tokenStorage.save(tokenPair('a'));
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      await tokenStorage.save(tokenPair('b'));
+      return new Response(null, { status: 204 });
+    }));
+    const { api } = await import('../src/services/api');
+    await expect(api('/notifications/device', { method: 'PUT', expectedUserId: 'a' })).rejects.toMatchObject({ status: 401 });
+  });
   it('não envia operação da conta A usando a sessão B', async () => {
     const { tokenStorage } = await import('../src/services/tokenStorage'); await tokenStorage.save(tokenPair('b'));
     const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);

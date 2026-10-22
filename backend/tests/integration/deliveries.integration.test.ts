@@ -16,6 +16,9 @@ import type { OrderStatus } from '../../src/modules/orders/order.types';
 import type { Role } from '../../src/modules/users/user.types';
 import { attachTracking } from '../../src/modules/tracking/tracking.socket';
 import type { TrackingView } from '../../src/modules/tracking/tracking.schemas';
+import { notificationsRepository } from '../../src/modules/notifications/notifications.repository';
+import { NotificationsWorker } from '../../src/modules/notifications/notifications.worker';
+import type { PushTransport } from '../../src/modules/notifications/notifications.types';
 
 const identities = {
   owner: { id: randomUUID(), role: 'OWNER' },
@@ -88,10 +91,13 @@ beforeAll(async () => {
   };
   await sqlFile('027_delivery_last_locations.sql');
   await sqlFile('027_delivery_last_locations.sql');
+  await sqlFile('028_delivery_notifications.sql');
+  await sqlFile('028_delivery_notifications.sql');
 });
 
 beforeEach(async () => {
   await admin.query('DELETE FROM deliveries');
+  await admin.query('DELETE FROM push_devices');
   await admin.query('DELETE FROM order_items');
   await admin.query('DELETE FROM orders');
   await admin.query('UPDATE users SET active = 1');
@@ -450,5 +456,83 @@ describe('Etapa 5: posição atual, HTTP e Socket.IO reais', () => {
     const ended = event<TrackingView>(client, 'delivery:location'); await complete(a.id);
     expect(await ended).toMatchObject({ deliveryId: a.id, active: false, position: null });
     expect((await getPoint(b.id)).body.active).toBe(true); client.disconnect();
+  });
+});
+
+describe('Etapa 6: eventos transacionais e dispositivos',()=>{
+  const device=(overrides:Record<string,unknown>={})=>({installationId:randomUUID(),installationKey:'a'.repeat(64),bindingVersion:1,
+    token:`ExpoPushToken[${randomUUID().replaceAll('-','')}]`,platform:'android',...overrides});
+  const register=(input:ReturnType<typeof device>,by:Identity='courier')=>request(app).put('/notifications/device').set(auth(by)).send(input);
+  const revoke=(input:ReturnType<typeof device>)=>request(app).post('/notifications/device/revoke').send({installationId:input.installationId,installationKey:input.installationKey,bindingVersion:input.bindingVersion});
+  async function events(id:string){const [rows]=await admin.query<RowDataPacket[]>('SELECT kind,user_id FROM delivery_notification_events WHERE delivery_id=? ORDER BY kind,user_id',[id]);return rows.map(r=>({kind:r.kind,userId:r.user_id}));}
+  it('registra apenas perfil elegível, token válido e instalação conhecida',async()=>{
+    const input=device();expect((await register(input)).status).toBe(204);expect((await register(input)).status).toBe(204);
+    expect((await register(device(),'owner')).status).toBe(403);
+    expect((await register(device({token:'inválido'}))).status).toBe(400);
+    expect((await register({...input,installationKey:'b'.repeat(64),bindingVersion:2})).status).toBe(409);
+    expect((await register(device({token:input.token}),'customer')).status).toBe(409);
+    const [[row]]=await admin.query<RowDataPacket[]>('SELECT user_id FROM push_devices WHERE id=?',[input.installationId]);expect(row.user_id).toBe(identities.courier.id);
+  });
+  it('versões impedem que logout antigo ou registro atrasado afetem outra conta',async()=>{
+    const input=device();await register(input);await register({...input,bindingVersion:2},'customer');await revoke(input);
+    expect((await register(input)).status).toBe(409);
+    const [[row]]=await admin.query<RowDataPacket[]>('SELECT active,user_id,binding_version FROM push_devices WHERE id=?',[input.installationId]);
+    expect(row).toMatchObject({active:1,user_id:identities.customer.id,binding_version:2});
+    expect((await revoke({...input,bindingVersion:2})).status).toBe(204);
+    expect((await register({...input,bindingVersion:2},'customer')).status).toBe(409);
+  });
+  it('revogação anterior ao primeiro registro deixa tombstone e não exige a sessão antiga',async()=>{
+    const input=device();expect((await revoke(input)).status).toBe(204);expect((await register(input)).status).toBe(409);
+    expect((await register({...input,bindingVersion:2})).status).toBe(204);
+    await revoke({...input,installationKey:'b'.repeat(64),bindingVersion:3});
+    const [[row]]=await admin.query<RowDataPacket[]>('SELECT active,binding_version FROM push_devices WHERE id=?',[input.installationId]);expect(row).toMatchObject({active:1,binding_version:2});
+  });
+  it('atribuir, trocar e iniciar criam um evento por mudança real',async()=>{
+    const d=await delivery();await assign(d.id);await assign(d.id);await assign(d.id,'otherCourier');await start(d.id,'otherCourier');await start(d.id,'otherCourier');
+    expect(await events(d.id)).toEqual(expect.arrayContaining([
+      {kind:'ASSIGNED',userId:identities.courier.id},{kind:'ASSIGNED',userId:identities.otherCourier.id},
+      {kind:'UNASSIGNED',userId:identities.courier.id},{kind:'OUT_FOR_DELIVERY',userId:identities.customer.id},
+    ]));expect(await events(d.id)).toHaveLength(4);
+  });
+  it('cancelamento por trigger cria aviso somente para motoboy atribuído',async()=>{
+    const a=await delivery(),b=await delivery();await assign(a.id);await ownerAction(a.orderId,'cancel');await ownerAction(b.orderId,'cancel');
+    expect(await events(a.id)).toContainEqual({kind:'CANCELLED',userId:identities.courier.id});expect(await events(b.id)).toEqual([]);
+  });
+  it('rollback no evento desfaz a atribuição inteira',async()=>{
+    const d=await delivery();await admin.query("CREATE TRIGGER test_fail_notification BEFORE INSERT ON delivery_notification_events FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Falha simulada'");
+    try{expect((await assign(d.id)).status).toBe(400);expect(await events(d.id)).toEqual([]);expect((await states(d.id)).deliveryStatus).toBe('WAITING_ASSIGNMENT');}
+    finally{await admin.query('DROP TRIGGER test_fail_notification');}
+  });
+  it('materializa uma tentativa por evento/dispositivo e não cria aviso histórico',async()=>{
+    const first=device();await register(first);const d=await delivery();await assign(d.id);
+    await notificationsRepository.materialize();await notificationsRepository.materialize();
+    const [[row]]=await admin.query<RowDataPacket[]>('SELECT COUNT(*) AS n FROM push_notification_attempts');expect(row.n).toBe(1);
+    const second=device();await register(second);await admin.query('UPDATE push_devices SET bound_at=DATE_ADD(UTC_TIMESTAMP(3),INTERVAL 1 SECOND) WHERE id=?',[second.installationId]);
+    await notificationsRepository.materialize();const [[after]]=await admin.query<RowDataPacket[]>('SELECT COUNT(*) AS n FROM push_notification_attempts');expect(after.n).toBe(1);
+  });
+  it('lease persiste entre workers e pode ser recuperada após interrupção',async()=>{
+    await register(device());const d=await delivery();await assign(d.id);await notificationsRepository.materialize();
+    const first=await notificationsRepository.claim(new Date(),randomUUID());expect(first).not.toBeNull();
+    expect(await notificationsRepository.claim(new Date(),randomUUID())).toBeNull();
+    await admin.query('UPDATE push_notification_attempts SET lease_until=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1 SECOND)');
+    const second=await notificationsRepository.claim(new Date(),randomUUID());expect(second?.id).toBe(first?.id);
+    await notificationsRepository.finish(first!,{status:'DELIVERED',nextAt:new Date()});
+    const [[row]]=await admin.query<RowDataPacket[]>('SELECT status,lease_id FROM push_notification_attempts');expect(row).toMatchObject({status:'SENDING',lease_id:second!.leaseId});
+  });
+  it('worker com transporte simulado envia, consulta recibo e remove token rejeitado',async()=>{
+    const input=device();await register(input);const d=await delivery();await assign(d.id);
+    let sent=0,checked=0;
+    const transport:PushTransport={send:async()=>{sent++;return{status:'ok',id:'ticket-1'};},receipt:async()=>{checked++;return{status:'error',code:'DeviceNotRegistered'};}};
+    let clock=Date.now();const worker=new NotificationsWorker(notificationsRepository,transport,()=>clock);await worker.tick();expect(sent).toBe(1);
+    const [[ticket]]=await admin.query<RowDataPacket[]>('SELECT status,ticket_id FROM push_notification_attempts');expect(ticket).toMatchObject({status:'TICKET',ticket_id:'ticket-1'});
+    clock+=16*60_000;await worker.tick();expect(checked).toBe(1);
+    const [[row]]=await admin.query<RowDataPacket[]>('SELECT active FROM push_devices WHERE id=?',[input.installationId]);expect(row.active).toBe(0);
+  });
+  it('worker ignora atribuição obsoleta e destinatário que trocou de conta',async()=>{
+    const input=device();await register(input);const d=await delivery();await assign(d.id);await notificationsRepository.materialize();
+    await register({...input,bindingVersion:2},'customer');
+    let sent=0;const transport:PushTransport={send:async()=>{sent++;return{status:'ok',id:'ticket'};},receipt:async()=>null};
+    await new NotificationsWorker(notificationsRepository,transport).tick();expect(sent).toBe(0);
+    const [[row]]=await admin.query<RowDataPacket[]>('SELECT status FROM push_notification_attempts');expect(row.status).toBe('SKIPPED');
   });
 });

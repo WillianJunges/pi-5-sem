@@ -116,7 +116,11 @@ export async function api<T = unknown>(path: string, options: RequestOptions = {
     res = await send(path, options, renewed.accessToken);
   }
 
-  if (res.status === 204) return undefined as T;
+  if (res.status === 204) {
+    // Registro de dispositivo não retorna JSON, mas também precisa respeitar troca de sessão.
+    checkSession(tokens);
+    return undefined as T;
+  }
 
   const data = await res.json().catch(() => undefined);
   checkSession(tokens);

@@ -4,6 +4,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { Button } from '../../../../src/components/Button';
 import { useAuth } from '../../../../src/contexts/AuthContext';
 import { colors, spacing } from '../../../../src/theme';
+import { NotificationSettings } from '../../../../src/features/notifications/NotificationSettings';
 
 const MENU: { label: string; href: Href }[] = [
   { label: 'Meus endereços', href: '/customer/addresses' },
@@ -52,6 +53,7 @@ export default function AccountScreen() {
       </View>
 
       <Button title="Sair" variant="outline" onPress={handleSignOut} loading={leaving} />
+      <NotificationSettings />
     </ScrollView>
   );
 }

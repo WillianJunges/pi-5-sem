@@ -3,6 +3,7 @@ import { ApiError, onSessionExpired } from '../services/api';
 import { authService, type RegisterData, type User } from '../services/auth.service';
 import { usersService } from '../services/users.service';
 import { stopCourierTracking } from '../features/tracking/nativeTracking';
+import { stopSessionNotifications } from '../features/notifications/nativeNotifications';
 
 interface AuthContextValue {
   /** Usuário logado, ou null se não houver sessão. */
@@ -28,6 +29,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // Falha no aviso não impede o usuário de sair; a sessão deixa de autorizar o acesso.
+    await stopSessionNotifications().catch(()=>undefined);
     await stopCourierTracking();
     await authService.logout();
     await setUser(null);

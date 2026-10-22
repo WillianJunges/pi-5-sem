@@ -1,6 +1,7 @@
 /** Simula a ponte nativa; valida ciclo de vida, não o GPS real nem a execução do sistema operacional. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as Tracking from '../src/features/tracking/nativeTracking';
+vi.mock('../src/features/notifications/nativeNotifications',()=>({processArrival:async()=>{},reconcileArrivalAlerts:async()=>{},clearArrivalAlerts:async()=>{}}));
 
 const native = vi.hoisted(() => ({
   values: new Map<string, string>(), user: 'a', epoch: 0, rows: [] as unknown[], pending: [] as { deliveryId: string }[],
