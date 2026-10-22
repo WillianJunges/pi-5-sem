@@ -422,6 +422,10 @@ Willian, responsabilidade indicada na especificação. Este protótipo não acre
 mapa nativo interno nem cálculo de rotas. REST inicial, reconexão e consulta de
 recuperação a cada 15s funcionam apenas com a tela em foco e app ativo.
 
+Para implementar o mapa do cliente ou incluir o painel de localização na
+Proprietária, seguir o [guia de integração do acompanhamento](integracao-acompanhamento-entrega.md),
+com resolução de IDs, contratos REST/Socket.IO, reuso do hook e roteiro de testes.
+
 ### Preparação e limites do teste
 
 Veja [teste-etapa5.md](teste-etapa5.md) para comandos e critérios de revisão.
