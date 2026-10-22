@@ -34,8 +34,10 @@ Este ambiente cloud não possui `adb`, emulador ou SDK Android configurado. Não
 conexão disponível aqui com um telefone físico; USB conectado ao computador do
 usuário não fica automaticamente acessível à máquina cloud.
 
-Continuam ausentes no projeto: identificador Android, EAS `projectId` e configuração
-Firebase/FCM. Por isso, recebimento push real permanece bloqueado. Alertas locais,
+O perfil `preview` usa o identificador Android de teste `com.ymlp.marmitaria.teste`.
+O usuário criou e vinculou o projeto EAS na cópia Windows; esse vínculo local é
+preservado por `app.config.js`. A configuração Firebase/FCM continua pendente e,
+por isso, recebimento push real permanece bloqueado. Alertas locais,
 GPS e conclusão offline podem ser testados após instalar um build nativo, sem push.
 
 O responsável pelo aparelho precisará executar os passos locais e compartilhar os
@@ -45,8 +47,10 @@ exportação JavaScript ou testes automatizados anteriores.
 O usuário informou um aparelho com **Android 16** e um computador **Windows sem
 Android Studio**. Para essa preparação, foi acrescentado o perfil APK via EAS em
 `mobile/eas.json`; veja [apk-android.md](apk-android.md). Ele permite compilar na
-nuvem sem SDK no Windows, mas aguarda autenticação/projeto Expo, identificador Android
-e URL de API confirmados. Ainda não foi gerado APK nem executado ensaio físico.
+nuvem sem SDK no Windows. Login e vínculo Expo foram confirmados, assim como acesso
+à API pelo navegador Android em `http://192.168.15.7:3333/health`. O perfil de teste
+permite HTTP para essa rede; ainda faltam definir a variável da API no EAS e compilar.
+Ainda não foi gerado APK nem executado ensaio físico do aplicativo.
 
 ## Critério de conclusão
 

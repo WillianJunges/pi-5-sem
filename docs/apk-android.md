@@ -30,16 +30,19 @@ na conta Expo da equipe quando chegar à etapa de build; nunca compartilhar a se
 
 ## Requisitos antes de compilar
 
-1. Definir o identificador Android real da equipe em `expo.android.package` e
-   vincular o app ao projeto Expo/EAS correto (`expo.extra.eas.projectId`).
-   Não foi escolhido identificador nem criado projeto automaticamente.
+1. Vincular o app ao projeto Expo/EAS correto com `npx.cmd eas-cli@latest init`.
+   O vínculo fica em `expo.extra.eas.projectId` no `app.json` local. A configuração
+   dinâmica em `app.config.js` preserva esse vínculo. O perfil `preview` define
+   o pacote de teste `com.ymlp.marmitaria.teste`, nome `Marmitaria Teste` e scheme
+   `marmitaria-teste`; o identificador de produção continua a cargo da equipe.
 2. Definir `EXPO_PUBLIC_API_URL` no ambiente EAS **preview**, apontando para uma API
    acessível pelo celular. Ela é pública e entra no aplicativo durante o build;
    não incluir senhas/tokens nessa variável.
 3. Preferir uma API HTTPS acessível pelo aparelho. `localhost`, `127.0.0.1` e
    `10.0.2.2` não apontam para o Windows em um APK instalado no telefone. Se o
    backend ficar no Windows, usar seu IP na mesma rede Wi-Fi e conferir firewall;
-   HTTP também exige verificar/liberar explicitamente o tráfego no build Android.
+   O perfil `preview` usa `APP_VARIANT=preview` para permitir HTTP no Android pelo
+   plugin `expo-build-properties`. Essa liberação não é aplicada fora dessa variante.
 4. Para push real, configurar Firebase/FCM conforme [teste-etapa6.md](teste-etapa6.md).
    Isso não é necessário para iniciar os testes de GPS/alertas locais/offline.
    Em build EAS, o arquivo Firebase também precisa ser disponibilizado ao servidor
@@ -52,20 +55,29 @@ depois da compilação exige gerar outro APK neste fluxo.
 
 ## Compilar no serviço usando o Windows
 
-Na cópia atualizada da branch `rastreamento-motorista`, com os requisitos acima
-resolvidos, executar no PowerShell:
+Na cópia atualizada da branch `rastreamento-motorista`, com login e vínculo EAS
+concluídos, executar no PowerShell. O IP abaixo foi confirmado pelo usuário no
+navegador Android durante esta preparação; em outra rede, usar o endereço verificado
+para aquele computador:
 
 ```powershell
-cd mobile
-npm ci
-npx eas-cli login
-npx eas-cli build --platform android --profile preview
+Set-Location "$env:USERPROFILE\pi-5-sem-teste\mobile"
+git pull --ff-only
+npm.cmd ci
+npx.cmd eas-cli@latest env:create --environment preview --name EXPO_PUBLIC_API_URL --value "http://192.168.15.7:3333" --visibility plaintext
+npx.cmd eas-cli@latest build --platform android --profile preview
 ```
 
-Usar a conta da equipe. A CLI pode pedir confirmação do projeto e configuração da
-assinatura Android; conferir as opções com o responsável. Não compartilhar senha
-ou token no chat. Autenticar no Windows não autentica automaticamente este ambiente
-cloud do Codex.
+Se a variável já existir, atualizar seu valor pelo painel do projeto Expo em vez
+de criar uma duplicata. O endereço é público e entra no APK, sem senhas ou tokens.
+O `app.json` alterado por `eas init` não deve ser descartado; essa atualização da
+branch não modifica esse arquivo. Se o Git indicar conflito, interromper e analisar
+a mensagem, sem usar reset/checkout para apagar o vínculo.
+
+Usar a conta da equipe. Para esse pacote de teste, se a CLI perguntar se deve gerar
+um novo keystore Android, responder `y`: o EAS gerencia a chave de assinatura do APK.
+Não compartilhar senha ou token no chat. Autenticar no Windows não autentica
+automaticamente este ambiente cloud do Codex.
 
 O EAS fornece uma página/link do build. Depois de terminar com sucesso, abrir o
 link no Android, baixar o `.apk`, autorizar a instalação por essa origem e instalar.
@@ -73,10 +85,14 @@ O app deve abrir sem terminal Metro no computador; a API ainda precisa estar ace
 
 ## Estado atual
 
-Perfil APK preparado. Nenhum build EAS foi iniciado e nenhum APK foi gerado ainda.
-Não há autenticação Expo disponível neste ambiente, identificador Android/projeto
-EAS configurados ou URL de API confirmada para o aparelho. Esses requisitos precisam
-ser resolvidos antes de anunciar um APK funcional para download.
+Perfil APK preparado, com pacote separado e HTTP permitido apenas na variante de
+teste. O usuário confirmou login Expo e vínculo do projeto no Windows. O navegador
+do Android acessou `http://192.168.15.7:3333/health`; a API retornou bancos saudáveis.
+MySQL no Windows usa porta de host 3307 e `DB_PORT=3307` no backend.
+
+A variável de API no EAS e a compilação ainda precisam ser executadas no Windows.
+Nenhum APK foi gerado ou instalado, e nenhum build foi iniciado neste ambiente cloud.
+O sucesso no navegador confirma a rede, mas ainda não comprova a conexão pelo APK.
 
 Compilar APK e executar os ensaios em Android 16 são passos distintos. Os testes da
 [matriz de dispositivos](validacao-dispositivos.md) continuam sem execução física.
