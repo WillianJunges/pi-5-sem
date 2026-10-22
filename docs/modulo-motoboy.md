@@ -1,7 +1,7 @@
-# Motoboy — etapa 2: banco e API de entregas
+# Motoboy — banco, API e telas online
 
-Esta etapa implementa a logística no backend. As telas, fila SQLite offline, GPS,
-Socket.IO e notificações dependem da aprovação das etapas seguintes.
+Etapa 2: logística no backend. Etapa 3: telas do motoboy e ações online.
+Fila SQLite offline, GPS, Socket.IO e notificações dependem das etapas seguintes.
 
 ## Preparação
 
@@ -15,7 +15,7 @@ npm run dev
 ```
 
 A migration `026_create_deliveries.sql` acrescenta apenas `deliveries` e dois triggers.
-Não modifica as colunas de `orders`, os scripts 001–025, o MongoDB ou o mobile.
+Não modifica as colunas de `orders`, os scripts 001–025 ou o MongoDB.
 `npm run db:migrate` pula scripts já registrados em `schema_migrations`.
 
 ## Dados e integridade
@@ -140,9 +140,86 @@ Antes desta etapa, a suíte completa já apresentava duas falhas em
 deixados por testes anteriores. Elas permanecem registradas como problema anterior,
 sem mudanças no módulo de autenticação nesta etapa.
 
+## Etapa 3 — telas e ações online do Motoboy
+
+Após login, o perfil COURIER acessa as abas **Entregas**, **Histórico** e **Conta**.
+O `Stack.Protected` existente continua separando os perfis. As telas do motoboy também
+limpam seus dados quando a API responde 401/403/404. A troca de conta remonta os modelos
+de tela para que dados e tentativas da sessão anterior não sejam reaproveitados.
+
+- **Entregas**: lista paginada das atribuídas e em andamento. Cada cartão mostra cliente,
+  endereço resumido, valor, estado do pedido e link para os detalhes.
+- **Histórico**: concluídas e canceladas, com paginação independente.
+- **Detalhes** (`/courier/delivery/:id`): cliente, telefone selecionável, endereço completo,
+  complemento/referência, observações, pagamento/troco e datas disponíveis.
+- **Copiar endereço**: usa Expo Clipboard; o texto copiado é o mesmo mostrado na tela,
+  com complemento, bairro, cidade, UF e CEP. Há seleção manual como alternativa.
+- **Conta**: perfil compartilhado e saída da sessão.
+
+O botão **Iniciar entrega** aparece apenas com Delivery=ASSIGNED e Order=READY. O botão
+**Concluir entrega** aparece apenas com Delivery=IN_PROGRESS e Order=OUT_FOR_DELIVERY.
+Ambos pedem confirmação e aguardam a API. Toques repetidos são bloqueados enquanto uma
+ação está em curso. As regras definitivas permanecem no backend.
+
+Ao voltar para uma tela ou para o app, os dados são consultados novamente. Entregas
+ativas também consultam status a cada 30s, somente com a tela em foco e o app em
+foreground. Esse polling não executa tarefa de background nem coleta localização.
+Uma atualização interrompe a paginação antiga, evitando misturar resultados atrasados.
+Quando uma leitura falha por conexão, os dados já carregados ficam visíveis com aviso;
+ações de alteração nos detalhes ficam bloqueadas até uma leitura válida.
+
+Uma conclusão enviada recebe UUID pelo Expo Crypto. Se a resposta se perder, o app
+consulta o estado atual: uma conclusão confirmada aparece como concluída; uma entrega
+ainda ativa mantém a mesma chave e horário para eventual reenvio. Essa tentativa existe
+**somente na memória da tela**: não há conclusão local, fila offline ou garantia de
+persistência após fechar a tela/app nesta etapa. A fila durável será implementada na
+etapa 4. Cancelamento ou perda de atribuição são reconciliados pela API.
+
+### Arquivos para manutenção
+
+| Caminho | Responsabilidade |
+|---|---|
+| `mobile/app/(app)/courier/_layout.tsx` | Stack de abas e detalhes |
+| `mobile/app/(app)/courier/(tabs)/` | Entregas, histórico e conta |
+| `mobile/app/(app)/courier/delivery/[id].tsx` | Detalhes, cópia e confirmação das ações |
+| `mobile/src/services/deliveries.service.ts` | Contratos e chamadas à API da etapa 2 |
+| `mobile/src/features/courier/models.ts` | Estado, concorrência e reconciliação do fluxo online |
+| `mobile/src/features/courier/presentation.ts` | Disponibilidade das ações e endereço copiável |
+| `mobile/src/features/courier/useCourierRefresh.ts` | Atualização por foco/foreground |
+| `mobile/tests/courier.test.ts` | Testes do fluxo online sem módulos nativos |
+
+### Validação do mobile
+
+```bash
+cd mobile
+npm ci
+npm run typecheck
+npm test
+npm start
+```
+
+Foram verificados instalação pelo lockfile, TypeScript e 21 testes de estado/concorrência:
+filtros, paginação atrasada, deduplicação, perda de conexão/autorização, toque duplicado,
+timeout da conclusão, reenvio com a mesma operação, cancelamento, endereço e ações permitidas.
+O bundle Android foi gerado com `expo export --platform android --max-workers 2`, incluindo
+as novas rotas. Isso valida a geração do JavaScript/Hermes, não a execução em dispositivo.
+A navegação visual, o clipboard nativo e o login no aparelho devem ser conferidos na
+matriz de dispositivos da etapa 7.
+
+Roteiro manual quando houver um aparelho configurado:
+
+1. Entrar como COURIER, conferir lista vazia, perfil e saída da sessão.
+2. Com um pedido DELIVERY confirmado, usar a API OWNER de atribuição da etapa 2.
+3. Atualizar a lista do motoboy e abrir os detalhes; conferir endereço e pagamento.
+4. Copiar e colar o endereço em outro app; comparar complemento e CEP.
+5. Antes de READY, conferir ausência do botão de início; após READY, iniciar online.
+6. Confirmar conclusão online e conferir sua passagem para o histórico.
+7. Cortar conexão e conferir aviso, ausência de falsa conclusão e recuperação após atualizar.
+8. Reatribuir/cancelar pela proprietária e conferir remoção do acesso/ações na atualização.
+9. Entrar como CUSTOMER ou OWNER e conferir bloqueio das rotas COURIER.
+
 ## Próximas etapas — aguardam aprovação
 
-3. Telas do Motoboy: lista, detalhes e estados de interface, usando estes contratos.
 4. Conclusão offline: fila durável SQLite e sincronização com a mesma chave de operação.
 5. Localização: Expo Location/Task Manager, persistência de posição e Socket.IO autorizado.
 6. Chegada e notificações: proximidade local, eventos e dispositivos push.

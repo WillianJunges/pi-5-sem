@@ -8,4 +8,4 @@
 | [banco-de-dados.md](banco-de-dados.md) | MySQL: tabelas, view, functions, procedures e triggers |
 | [banco-nao-relacional.md](banco-nao-relacional.md) | MongoDB: desnormalização e coleções |
 | [modulo-proprietaria.md](modulo-proprietaria.md) | Proprietária: produtos, cardápios, taxas e o cardápio do dia (`GET /menus/today`) |
-| [modulo-motoboy.md](modulo-motoboy.md) | Motoboy, etapa 2: banco, API de entregas, transições e idempotência |
+| [modulo-motoboy.md](modulo-motoboy.md) | Motoboy, etapas 2–3: banco, API de entregas, telas e ações online |
