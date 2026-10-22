@@ -14,6 +14,7 @@ Os scripts ficam em `database/schema/` e são aplicados com `npm run db:migrate`
 | `products` / `product_variants` | 011 | Catálogo: produtos e variações com preço padrão (Proprietária) |
 | `menus` / `menu_items` | 012 | Cardápios por dia e seus itens, com preço especial (Proprietária) |
 | `delivery_fee_ranges` | 013 | Faixas de distância e taxa de entrega (Proprietária) |
+| `deliveries` | 026 | Entrega por pedido, atribuição, endereço preservado, estados e conclusão idempotente (Motoboy) |
 | `schema_migrations` | — | Controle de quais scripts já rodaram (criada pelo `db:migrate`) |
 
 ## Objetos programáveis
@@ -34,6 +35,8 @@ Os scripts ficam em `database/schema/` e são aplicados com `npm run db:migrate`
 | Procedure | `sp_activate_menu(menu_id)` | 016 | Ativa o cardápio em **transação**: rascunho, com itens, todos disponíveis e nenhum outro ativo (`FOR UPDATE`) | `POST /owner/menus/:id/activate` |
 | Trigger | `trg_menu_items_before_insert/update/delete` | 017 | Bloqueiam mudanças em cardápio encerrado | Itens do cardápio |
 | Trigger | `trg_fee_ranges_before_insert/update` | 017 | Impedem faixas de taxa sobrepostas | Faixas de taxa |
+| Trigger | `trg_orders_delivery_logistics` | 026 | Cria entrega ao confirmar pedido DELIVERY e coordena seu cancelamento | Confirmação/cancelamento de pedidos |
+| Trigger | `trg_deliveries_snapshot_immutable` | 026 | Preserva identidade do pedido e endereço original da entrega | Atualizações em `deliveries` |
 
 ## Transações e tratamento de erros
 
@@ -70,8 +73,9 @@ Cada integrante cria os objetos do seu módulo como novos scripts numerados, por
 - **Proprietária**: já criados os scripts 011–017 (catálogo, cardápio e taxas, ver tabela acima).
   Ainda previstos, quando os pedidos existirem: `sp_change_order_status` (valida transição de status),
   `trg_orders_after_update` (histórico de status), `vw_daily_sales`.
-- **Motoboy**: `sp_finish_delivery` (com proteção contra finalização duplicada),
-  `vw_courier_deliveries`.
+- **Motoboy**: a etapa 2 usa transações no repository, locks de pedido/entrega e chave
+  única para concluir sem duplicidade, além dos triggers da migration 026.
+  Contratos e detalhes em [modulo-motoboy.md](modulo-motoboy.md).
 
 Funções e triggers em scripts precisam de `DELIMITER $$ ... DELIMITER ;` (como no
 Workbench). O `db:migrate` entende essa diretiva.

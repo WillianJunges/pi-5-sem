@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { deliveriesRoutes } from './modules/deliveries/deliveries.routes';
 import { checkDatabaseConnection } from './config/database';
 import { checkMongoConnection } from './config/mongo';
 import { addressesRoutes } from './modules/addresses/addresses.routes';
@@ -20,6 +21,7 @@ routes.get('/health', async (_req, res) => {
 });
 
 routes.use('/auth', authRoutes);
+routes.use('/deliveries', deliveriesRoutes);
 routes.use('/users', usersRoutes);
 routes.use('/geo', geoRoutes);
 routes.use('/menus', menusRoutes); // público: cardápio do dia
