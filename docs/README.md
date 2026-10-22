@@ -11,3 +11,4 @@
 | [modulo-motoboy.md](modulo-motoboy.md) | Motoboy, etapas 2–6: entregas, offline, rastreamento e notificações |
 | [teste-etapa5.md](teste-etapa5.md) | Preparação e roteiro para avaliar o rastreamento |
 | [teste-etapa6.md](teste-etapa6.md) | Alertas de chegada, configuração push e evidências de validação |
+| [apk-android.md](apk-android.md) | Gerar APK na nuvem e instalar no Android sem Android Studio |
