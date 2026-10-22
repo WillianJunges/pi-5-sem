@@ -1,5 +1,6 @@
 import { API_URL } from '../config/env';
 import { tokenStorage, type Tokens } from './tokenStorage';
+import { accessTokenUserId } from './sessionTokens';
 
 export class ApiError extends Error {
   constructor(
@@ -17,6 +18,8 @@ interface RequestOptions {
   body?: unknown;
   /** Envia o access token (padrão: true). Use false nas rotas públicas. */
   auth?: boolean;
+  /** A fila do motoboy só pode enviar operações com a conta que as criou. */
+  expectedUserId?: string;
 }
 
 /** Tempo máximo de espera por uma resposta da API. */
@@ -55,27 +58,34 @@ async function send(path: string, { method = 'GET', body, auth = true }: Request
 }
 
 // Evita disparar vários refresh ao mesmo tempo quando várias requisições recebem 401.
-let refreshing: Promise<Tokens | null> | null = null;
+let refreshing: { token: string; promise: Promise<Tokens | null> } | null = null;
 
-function refreshTokens(): Promise<Tokens | null> {
-  refreshing ??= (async () => {
+function refreshTokens(expected: Tokens): Promise<Tokens | null> {
+  if (refreshing?.token === expected.refreshToken) return refreshing.promise;
+  const promise = (async () => {
     const current = await tokenStorage.get();
-    if (!current) return null;
+    if (!current) throw sessionChanged();
+    if (current.refreshToken !== expected.refreshToken) {
+      if (accessTokenUserId(current.accessToken) === accessTokenUserId(expected.accessToken)) return current;
+      throw sessionChanged();
+    }
 
     const res = await send('/auth/refresh', { method: 'POST', body: { refreshToken: current.refreshToken }, auth: false });
     if (!res.ok) {
-      await tokenStorage.clear();
+      if (res.status !== 401 && res.status !== 403) throw new ApiError('Não foi possível renovar a sessão agora. Tente novamente.', res.status);
+      if (!await tokenStorage.replaceIfCurrent(current, null)) throw sessionChanged();
       return null;
     }
 
     const data = (await res.json()) as Tokens;
     const tokens = { accessToken: data.accessToken, refreshToken: data.refreshToken };
-    await tokenStorage.save(tokens);
+    if (!await tokenStorage.replaceIfCurrent(current, tokens)) throw sessionChanged();
     return tokens;
   })().finally(() => {
-    refreshing = null;
+    if (refreshing?.token === expected.refreshToken) refreshing = null;
   });
-  return refreshing;
+  refreshing = { token: expected.refreshToken, promise };
+  return promise;
 }
 
 /**
@@ -84,25 +94,41 @@ function refreshTokens(): Promise<Tokens | null> {
  */
 export async function api<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
   const auth = options.auth ?? true;
+  const epoch = tokenStorage.getSessionEpoch();
   const tokens = auth ? await tokenStorage.get() : null;
+  const checkSession = (value: Tokens | null) => {
+    if (auth && epoch !== tokenStorage.getSessionEpoch()) throw sessionChanged();
+    if (options.expectedUserId && (!value || accessTokenUserId(value.accessToken) !== options.expectedUserId)) throw sessionChanged();
+  };
+  checkSession(tokens);
 
   let res = await send(path, options, tokens?.accessToken);
 
   if (res.status === 401 && auth && tokens) {
-    const renewed = await refreshTokens();
+    checkSession(tokens);
+    const renewed = await refreshTokens(tokens);
     if (!renewed) {
+      if (epoch !== tokenStorage.getSessionEpoch()) throw sessionChanged();
       sessionExpiredListener?.();
       throw new ApiError('Sessão expirada. Faça login novamente.', 401);
     }
+    checkSession(renewed);
     res = await send(path, options, renewed.accessToken);
   }
 
-  if (res.status === 204) return undefined as T;
+  if (res.status === 204) {
+    // Registro de dispositivo não retorna JSON, mas também precisa respeitar troca de sessão.
+    checkSession(tokens);
+    return undefined as T;
+  }
 
   const data = await res.json().catch(() => undefined);
+  checkSession(tokens);
   if (!res.ok) {
     const message = (data as { error?: string } | undefined)?.error ?? 'Erro na comunicação com o servidor';
     throw new ApiError(message, res.status, data);
   }
   return data as T;
 }
+
+function sessionChanged() { return new ApiError('A sessão mudou. Tente novamente com a conta atual.', 401); }

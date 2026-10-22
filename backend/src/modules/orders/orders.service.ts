@@ -240,16 +240,9 @@ export class OrdersService {
     //   (database/schema/019) recusa transições fora do fluxo da seção 11 e preenche
     //   sozinho o horário (confirmed_at, preparing_at...). Valores e itens não mudam.
     //
-    // [Lucas + Yuri · Entregas] Só pedidos com fulfillment = 'DELIVERY' geram entrega: a
-    //   retirada no local (PICKUP, script 022) não tem endereço nem motoboy; a proprietária
-    //   marca "retirado" (POST /owner/orders/:id/pickup, READY → DELIVERED).
-    //   O escopo (seção 12) separa pedido e entrega (tabela
-    //   `deliveries`, estados WAITING_ASSIGNMENT → ASSIGNED → IN_PROGRESS → COMPLETED).
-    //   Falta decidir QUEM cria a entrega: aqui, logo após criar o pedido (como
-    //   WAITING_ASSIGNMENT), ou quando a proprietária confirma/atribui o motoboy.
-    //   O endereço da entrega já está copiado no pedido (colunas address_*, com latitude e
-    //   longitude) e a distância calculada fica em `orders.distance_meters`.
-    //   Para distâncias/rotas no rastreamento, reutilizar geoService.drivingDistanceMeters.
+    // [Yuri · Entregas] A migration 026 cria a Delivery quando a proprietária confirma
+    //   um pedido DELIVERY. O trigger copia este endereço e participa da confirmação.
+    //   Pedidos PICKUP não geram entrega e continuam usando a ação de retirada.
     //
     // [Opcional · MongoDB] docs/banco-nao-relacional.md propõe a coleção `orders`
     //   desnormalizada; dá para gravar a cópia aqui, seguindo o padrão de access-logs.

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { ownerDeliveriesRoutes } from '../deliveries/deliveries.routes';
 import { couriersController } from '../couriers/couriers.controller';
 import { deliveryFeesController } from '../delivery-fees/deliveryFees.controller';
 import { menusController } from '../menus/menus.controller';
@@ -10,6 +11,7 @@ import { productsController } from '../products/products.controller';
  * Montadas em routes.ts com `authenticate, authorize('OWNER')`.
  */
 export const ownerRoutes = Router();
+ownerRoutes.use('/deliveries', ownerDeliveriesRoutes);
 
 // Produtos e variações (escopo, seção 7)
 ownerRoutes.get('/products', productsController.list);

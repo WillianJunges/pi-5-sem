@@ -1,6 +1,9 @@
 import { Stack } from 'expo-router';
 
-/** Navegação do perfil Motoboy (Yuri). Pode trocar por Tabs se preferir. */
+/** As abas compartilham a área COURIER; detalhes mantêm o botão de voltar. */
 export default function CourierLayout() {
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return <Stack>
+    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+    <Stack.Screen name="delivery/[id]" options={{ title: 'Detalhes da entrega', headerBackTitle: 'Voltar' }} />
+  </Stack>;
 }

@@ -2,7 +2,10 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
+import { CourierOfflineProvider } from '../src/features/courier/offline/CourierOfflineProvider';
+import { CourierTrackingProvider } from '../src/features/tracking/CourierTrackingProvider';
 import { colors } from '../src/theme';
+import { NotificationsProvider } from '../src/features/notifications/NotificationsProvider';
 
 function RootNavigator() {
   const { user, loading } = useAuth();
@@ -31,8 +34,13 @@ function RootNavigator() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <StatusBar style="dark" />
-      <RootNavigator />
+      <CourierOfflineProvider>
+        <CourierTrackingProvider>
+          <StatusBar style="dark" />
+          <RootNavigator />
+          <NotificationsProvider>{null}</NotificationsProvider>
+        </CourierTrackingProvider>
+      </CourierOfflineProvider>
     </AuthProvider>
   );
 }
