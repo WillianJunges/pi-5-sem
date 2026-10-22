@@ -1,6 +1,7 @@
+import { isRunningInExpoGo } from 'expo';
 import Constants from 'expo-constants';
 import * as Crypto from 'expo-crypto';
-import * as Notifications from 'expo-notifications';
+import type * as NotificationsModule from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { api } from '../../services/api';
@@ -12,6 +13,32 @@ import { trackingTargets, usableFix } from '../tracking/policy';
 import { nearDestination } from './arrivalPolicy';
 import { parseDeliveryNotification } from './payload';
 import { PushBindings, type Installation } from './pushBindings';
+
+/**
+ * expo-notifications é carregado sob demanda: no Expo Go (Android, SDK 53+) faltam os módulos
+ * nativos dele e um `import` direto derrubava o app inteiro ao abrir. No Expo Go o módulo nem
+ * é carregado (o Metro acusa erro ao carregar, mesmo com catch): as notificações ficam
+ * desligadas e o resto do app funciona. No APK/development build nada muda.
+ */
+const EXPO_GO_MESSAGE =
+  'Notificações não funcionam no Expo Go. Use o APK de teste (docs/apk-android.md) para ativar os avisos.';
+let loaded: Promise<typeof NotificationsModule | null> | null = null;
+export function loadNotifications(): Promise<typeof NotificationsModule | null> {
+  if (isRunningInExpoGo()) return Promise.resolve(null);
+  loaded ??= import('expo-notifications')
+    .then((module) => {
+      registerForegroundHandler(module);
+      return module;
+    })
+    .catch(() => null);
+  return loaded;
+}
+/** Para quem precisa do módulo: no Expo Go avisa com uma mensagem clara em vez de quebrar. */
+async function notificationsOrThrow() {
+  const module = await loadNotifications();
+  if (!module) throw new Error(EXPO_GO_MESSAGE);
+  return module;
+}
 
 const INSTALLATION = 'notifications.installation.v1';
 const prefsKey = (userId: string) => `notifications.preferences.${userId}`;
@@ -86,6 +113,7 @@ async function preferences(userId: string): Promise<{ arrivals: boolean }> {
   }
 }
 async function channels() {
+  const Notifications = await notificationsOrThrow();
   if (Platform.OS === 'android')
     await Notifications.setNotificationChannelAsync('deliveries', {
       name: 'Entregas',
@@ -94,6 +122,7 @@ async function channels() {
     });
 }
 async function permit() {
+  const Notifications = await notificationsOrThrow();
   await channels();
   const p = await Notifications.requestPermissionsAsync();
   if (!p.granted && p.ios?.status !== Notifications.IosAuthorizationStatus.PROVISIONAL)
@@ -120,6 +149,12 @@ export async function enablePushAlerts(userId: string, askPermission = true) {
     throw new Error(
       'Os avisos de pedidos ainda não estão disponíveis nesta versão. Você pode ativar os alertas locais de chegada separadamente.',
     );
+  const Notifications = await loadNotifications();
+  if (!Notifications) {
+    // reativação silenciosa (ao abrir o app) não mostra erro; o pedido do usuário mostra
+    if (askPermission) throw new Error(EXPO_GO_MESSAGE);
+    return;
+  }
   if (askPermission) await permit();
   else if (!(await Notifications.getPermissionsAsync()).granted) return;
   const token = await Notifications.getExpoPushTokenAsync({ projectId });
@@ -168,12 +203,15 @@ export async function stopSessionNotifications() {
   revision++;
   suppressedEpoch = tokenStorage.getSessionEpoch();
   await pushBindings.disable();
-  if (Platform.OS !== 'web')
+  const Notifications = await loadNotifications();
+  if (Platform.OS !== 'web' && Notifications)
     await Promise.allSettled([Notifications.dismissAllNotificationsAsync(), clearArrivalAlerts()]);
   await refreshNotificationState(null);
   void pushBindings.flush().catch(() => undefined);
 }
 export async function clearArrivalAlerts(userId?: string) {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return;
   const prefix = userId ? `arrival:${userId}:` : 'arrival:';
   for (const notification of await Notifications.getAllScheduledNotificationsAsync())
     if (notification.identifier.startsWith(prefix))
@@ -188,6 +226,8 @@ export async function processArrival(userId: string, fix: PositionFix) {
   if (!usableFix(fix, Date.now()) || Date.now() - fix.timestamp > 30_000) return;
   if (!(await current(userId)) || !(await preferences(userId)).arrivals || (await courierStorage.isBlocked(userId)))
     return;
+  const Notifications = await loadNotifications();
+  if (!Notifications) return;
   const permission = await Notifications.getPermissionsAsync();
   if (!permission.granted && permission.ios?.status !== Notifications.IosAuthorizationStatus.PROVISIONAL) return;
   const pending = await courierStorage.pending(userId);
@@ -269,6 +309,8 @@ export async function processArrival(userId: string, fix: PositionFix) {
 }
 
 export async function reconcileArrivalAlerts(userId: string) {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return;
   const pending = await courierStorage.pending(userId),
     rows = await courierStorage.list(userId);
   const ids = (await courierStorage.isBlocked(userId))
@@ -287,6 +329,7 @@ export async function reconcileArrivalAlerts(userId: string) {
 }
 
 // Em foreground, recusa payload de outra conta e apresentações repetidas do mesmo evento.
+function registerForegroundHandler(Notifications: typeof NotificationsModule) {
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const p = parseDeliveryNotification(notification.request.content.data);
@@ -312,3 +355,7 @@ Notifications.setNotificationHandler({
     return { shouldShowBanner: show, shouldShowList: show, shouldPlaySound: show, shouldSetBadge: false };
   },
 });
+}
+
+// carrega já na abertura para registrar o handler acima (no Expo Go, só devolve null)
+void loadNotifications();

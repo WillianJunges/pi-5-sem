@@ -23,6 +23,7 @@ const h = vi.hoisted(() => ({
   dismiss: vi.fn(),
   sequence: 0,
 }));
+vi.mock('expo', () => ({ isRunningInExpoGo: () => false }));
 vi.mock('expo-constants', () => ({
   default: {
     get easConfig() {

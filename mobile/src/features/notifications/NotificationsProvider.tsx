@@ -1,4 +1,4 @@
-import * as Notifications from 'expo-notifications';
+import type { NotificationResponse } from 'expo-notifications';
 import NetInfo from '@react-native-community/netinfo';
 import { router, useRootNavigationState } from 'expo-router';
 import { type ReactNode, useEffect } from 'react';
@@ -10,7 +10,7 @@ import { tokenStorage } from '../../services/tokenStorage';
 import { courierStorage } from '../courier/offline/nativeStorage';
 import { courierAccessChanges } from '../courier/offline/accessChanges';
 import { parseDeliveryNotification, notificationForUser } from './payload';
-import { reconcileNotifications, enablePushAlerts, pushBindings } from './nativeNotifications';
+import { reconcileNotifications, enablePushAlerts, loadNotifications, pushBindings } from './nativeNotifications';
 import { notificationRefresh } from './refreshEvents';
 import { NotificationOpener } from './openNotification';
 
@@ -39,12 +39,19 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       if (active && value.binding?.userId === user.id) await enablePushAlerts(user.id, false).catch(() => undefined);
     }
     void refreshToken();
-    const token = Notifications.addPushTokenListener(() => {
-      void refreshToken();
-    });
-    const received = Notifications.addNotificationReceivedListener((notification) => {
-      const p = parseDeliveryNotification(notification.request.content.data);
-      if (active && user && p && notificationForUser(p, user)) notificationRefresh.request(user.id);
+    // no Expo Go o módulo não carrega (null): sem ouvintes de push, o resto continua
+    const subscriptions: { remove(): void }[] = [];
+    void loadNotifications().then((Notifications) => {
+      if (!Notifications || !active) return;
+      subscriptions.push(
+        Notifications.addPushTokenListener(() => {
+          void refreshToken();
+        }),
+        Notifications.addNotificationReceivedListener((notification) => {
+          const p = parseDeliveryNotification(notification.request.content.data);
+          if (active && user && p && notificationForUser(p, user)) notificationRefresh.request(user.id);
+        }),
+      );
     });
     const timer = setInterval(sync, 30_000);
     return () => {
@@ -52,8 +59,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       clearInterval(timer);
       online();
       app.remove();
-      token.remove();
-      received.remove();
+      for (const subscription of subscriptions) subscription.remove();
     };
   }, [user?.id, loading]);
 
@@ -83,8 +89,8 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         else router.push(`/customer/order/${delivery.orderId}`);
       },
     });
-    async function open(response: Notifications.NotificationResponse) {
-      if (response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return;
+    async function open(response: NotificationResponse, defaultAction: string) {
+      if (response.actionIdentifier !== defaultAction) return;
       try {
         await opener.open(response.notification.request.content.data);
       } catch {
@@ -95,17 +101,22 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
           );
       }
     }
-    const response = Notifications.addNotificationResponseReceivedListener((value) => {
-      void open(value);
+    let response: { remove(): void } | null = null;
+    void loadNotifications().then((Notifications) => {
+      if (!Notifications || !active) return;
+      const defaultAction = Notifications.DEFAULT_ACTION_IDENTIFIER;
+      response = Notifications.addNotificationResponseReceivedListener((value) => {
+        void open(value, defaultAction);
+      });
+      void Notifications.getLastNotificationResponseAsync()
+        .then((value) => {
+          if (value) void open(value, defaultAction);
+        })
+        .catch(() => undefined);
     });
-    void Notifications.getLastNotificationResponseAsync()
-      .then((value) => {
-        if (value) void open(value);
-      })
-      .catch(() => undefined);
     return () => {
       active = false;
-      response.remove();
+      response?.remove();
     };
   }, [user?.id, user?.role, loading, navigation?.key]);
   return children;
