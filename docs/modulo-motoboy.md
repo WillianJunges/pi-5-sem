@@ -1,7 +1,8 @@
-# Motoboy — banco, API e telas online
+# Motoboy — banco, API, telas e conclusão offline
 
 Etapa 2: logística no backend. Etapa 3: telas do motoboy e ações online.
-Fila SQLite offline, GPS, Socket.IO e notificações dependem das etapas seguintes.
+Etapa 4: cache SQLite, conclusão local durável e sincronização por conta.
+GPS, Socket.IO e notificações dependem das etapas seguintes.
 
 ## Preparação
 
@@ -158,22 +159,24 @@ de tela para que dados e tentativas da sessão anterior não sejam reaproveitado
 
 O botão **Iniciar entrega** aparece apenas com Delivery=ASSIGNED e Order=READY. O botão
 **Concluir entrega** aparece apenas com Delivery=IN_PROGRESS e Order=OUT_FOR_DELIVERY.
-Ambos pedem confirmação e aguardam a API. Toques repetidos são bloqueados enquanto uma
-ação está em curso. As regras definitivas permanecem no backend.
+Ambos pedem confirmação. O início aguarda a API; a conclusão passa pela fila durável da
+etapa 4. Toques repetidos são bloqueados enquanto uma ação está em curso. As regras
+definitivas permanecem no backend.
 
 Ao voltar para uma tela ou para o app, os dados são consultados novamente. Entregas
 ativas também consultam status a cada 30s, somente com a tela em foco e o app em
 foreground. Esse polling não executa tarefa de background nem coleta localização.
 Uma atualização interrompe a paginação antiga, evitando misturar resultados atrasados.
 Quando uma leitura falha por conexão, os dados já carregados ficam visíveis com aviso;
-ações de alteração nos detalhes ficam bloqueadas até uma leitura válida.
+o início fica bloqueado até uma leitura válida. Uma entrega já iniciada e salva no
+aparelho pode ser concluída localmente pelo fluxo da etapa 4.
 
 Uma conclusão enviada recebe UUID pelo Expo Crypto. Se a resposta se perder, o app
 consulta o estado atual: uma conclusão confirmada aparece como concluída; uma entrega
-ainda ativa mantém a mesma chave e horário para eventual reenvio. Essa tentativa existe
-**somente na memória da tela**: não há conclusão local, fila offline ou garantia de
-persistência após fechar a tela/app nesta etapa. A fila durável será implementada na
-etapa 4. Cancelamento ou perda de atribuição são reconciliados pela API.
+ainda ativa mantém a mesma chave e horário para eventual reenvio. Na implementação
+inicial da etapa 3, essa tentativa existia só na memória. A etapa 4 substitui esse
+caminho no aplicativo pelo gateway com fila SQLite, descrito abaixo. Cancelamento ou
+perda de atribuição continuam sendo reconciliados pela API.
 
 ### Arquivos para manutenção
 
@@ -198,7 +201,7 @@ npm test
 npm start
 ```
 
-Foram verificados instalação pelo lockfile, TypeScript e 21 testes de estado/concorrência:
+Na etapa 3 foram verificados instalação pelo lockfile, TypeScript e 21 testes de estado/concorrência:
 filtros, paginação atrasada, deduplicação, perda de conexão/autorização, toque duplicado,
 timeout da conclusão, reenvio com a mesma operação, cancelamento, endereço e ações permitidas.
 O bundle Android foi gerado com `expo export --platform android --max-workers 2`, incluindo
@@ -218,9 +221,122 @@ Roteiro manual quando houver um aparelho configurado:
 8. Reatribuir/cancelar pela proprietária e conferir remoção do acesso/ações na atualização.
 9. Entrar como CUSTOMER ou OWNER e conferir bloqueio das rotas COURIER.
 
+## Etapa 4 — conclusão offline e sincronização durável
+
+A aba **Pendências** mostra confirmações locais ainda não aceitas e conflitos que
+precisam de revisão. As entregas concluídas localmente saem da lista ativa e aparecem
+no histórico com o selo **Concluída neste aparelho — aguardando sincronização**.
+O status oficial do pedido continua vindo da API; a interface não inventa DELIVERED.
+
+### Banco local
+
+O arquivo privado do aplicativo `courier-deliveries.db` usa `PRAGMA user_version=1` e
+contém apenas estas estruturas novas:
+
+| Tabela | Conteúdo |
+|---|---|
+| `courier_cache` | Snapshot autorizado da entrega, separado por `user_id` e `delivery_id` |
+| `courier_completions` | Pedido/entrega, UUID da operação, horário original, tentativas, próxima tentativa, reserva de envio e mensagem de conflito |
+| `courier_accounts` | Bloqueio local de uma conta cujo acesso foi recusado explicitamente pelo backend |
+
+O schema é criado sem apagar dados. O carrinho, cache do cliente, MongoDB e schema
+MySQL não são alterados. A API idempotente da etapa 2 é reutilizada.
+
+Cada entrega tem uma única intenção local por conta. Uma transação verifica o snapshot
+iniciado e grava a intenção antes de qualquer envio, inclusive quando há internet.
+Se faltar espaço ou o SQLite falhar, o app mostra erro e não afirma ter concluído
+localmente. Chave e horário não são recriados no reinício ou em reenvios.
+
+O cache contém só os campos da entrega necessários às telas; tokens e senhas não entram
+no SQLite. Editar o cache com uma resposta de rede nunca apaga a fila. Uma leitura
+atrasada de entrega ativa também não reabre uma conclusão já confirmada.
+
+### Envio e confirmação
+
+O worker funciona com sessão COURIER, aplicativo em foreground e conexão disponível.
+Ele tenta ao abrir/retomar o aplicativo, ao recuperar a conexão, a cada 20s enquanto
+ativo e pelo botão de sincronização. Não há tarefa de execução com o aplicativo
+fechado nesta etapa: ao reabrir, as intenções persistidas são recuperadas.
+
+Uma reserva de envio de 60s evita dois workers reclamarem a mesma operação. Se o
+processo morrer durante o envio, outro ciclo recupera a operação após a reserva expirar.
+Falhas temporárias usam espera progressiva de 5s até 5min, respeitada pelos ciclos;
+recuperação de rede, retomada e tentativa manual podem antecipar uma tentativa ainda
+não reservada. Não há descarte por atingir um limite de tentativas.
+
+Somente um POST de conclusão confirmado pode remover a intenção. Atualizar o cache
+para COMPLETED/DELIVERED e remover a fila ocorre na mesma transação SQLite. Se a API
+aceitar e sua resposta se perder, a mesma operação é reenviada. Um GET que mostre a
+entrega concluída não apaga silenciosamente uma operação diferente.
+
+| Resposta/situação | Tratamento |
+|---|---|
+| Sem rede, timeout ou 5xx | Preserva a operação e tenta depois |
+| 401/sessão alterada | Pausa; mantém a fila para a conta responsável entrar novamente |
+| 403/conta sem permissão | Pausa e bloqueia uso do cache até revalidação online |
+| 404/perda de atribuição | Remove o endereço do cache e mantém referência da pendência para revisão |
+| 400, 409 ou 422 | Marca conflito; não altera o estado remoto nem repete automaticamente |
+| Confirmação válida | Atualiza o cache e remove a intenção atomicamente |
+
+O botão **Revisar e tentar novamente** pede confirmação e reapresenta a mesma operação
+ao backend. Ele não força cancelamento, troca de motoboy ou horário incompatível a
+virar entrega concluída. Se a recusa persistir, a pendência continua visível para
+correção junto à proprietária.
+
+### Isolamento de sessão
+
+Listas, snapshots e pendências são filtrados pela conta que os originou. Sair não
+apaga as intenções; a tela de conta avisa quando há pendências. Outra conta no mesmo
+aparelho não as recebe nem as sincroniza.
+
+O gateway HTTP verifica o usuário do token antes de enviar/repetir cada operação. Uma
+mudança de sessão invalida requisições que ainda aguardavam leitura de credenciais.
+Requisições já enviadas podem receber resposta após logout; a confirmação é gravada
+somente na fila da conta original, sem iniciar o próximo envio dessa sessão.
+
+Para evitar corridas de refresh/login/logout, os tokens permanecem no SecureStore,
+agora como um único par JSON em `auth.tokens`. A leitura é compatível com as chaves
+legadas e o próximo salvamento as migra. A limpeza antiga não pode ressuscitar uma
+sessão encerrada. Um refresh atrasado não sobrescreve outro login; erro temporário
+no refresh não apaga as credenciais. A leitura local do identificador JWT não substitui
+a verificação de assinatura/permissões no backend.
+
+### Arquivos e verificação
+
+O módulo `mobile/src/features/courier/offline/` contém a porta SQL, implementação do
+SQLite, gateway/worker e provider de sessão/rede/foreground. Os componentes continuam
+usando os modelos testáveis da etapa 3. Não foram adicionados GPS, socket ou push.
+
+```bash
+cd mobile
+npm ci
+npm run typecheck
+npm test
+npx expo export --platform android --max-workers 2
+```
+
+Os testes de persistência usam `node:sqlite` com arquivos reais no host (Node 24 no
+ambiente preparado). A suíte tem 66 testes, incluindo os 21 anteriores. Ela verifica
+reabertura, rollback, reservas após interrupção, reenvios, backoff, perda de conexão,
+troca de conta, cancelamento/conflitos, migração segura de tokens e falha de armazenamento.
+Isso não simula o comportamento do driver nativo em um telefone.
+
+Também foi executado um smoke com SQLite, HTTP e MySQL reais em bancos de teste:
+concluir offline, enviar, perder a resposta após o commit e reenviar preservou uma
+única conclusão e o mesmo horário de recebimento. Os dados temporários foram removidos.
+
+Roteiro adicional para a etapa de dispositivos:
+
+1. Iniciar online, abrir os detalhes e desligar a rede.
+2. Concluir e conferir o selo local, a saída das ativas e a aba Pendências.
+3. Fechar/reabrir o app sem rede; conferir a mesma intenção e o endereço salvo.
+4. Recuperar rede e conferir DELIVERED no cliente somente após confirmação.
+5. Sair com pendências, entrar em outra conta e conferir seu isolamento; voltar à conta original.
+6. Simular cancelamento/reatribuição/recusa e conferir revisão explícita, sem sobrescrita.
+7. Testar falta de espaço e interrupção durante envio; nunca apresentar falso sucesso local.
+
 ## Próximas etapas — aguardam aprovação
 
-4. Conclusão offline: fila durável SQLite e sincronização com a mesma chave de operação.
 5. Localização: Expo Location/Task Manager, persistência de posição e Socket.IO autorizado.
 6. Chegada e notificações: proximidade local, eventos e dispositivos push.
 7. Validação em dispositivos reais e documentação das limitações observadas.

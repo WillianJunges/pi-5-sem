@@ -8,9 +8,9 @@ export const DELIVERY_LABELS: Record<DeliveryStatus, string> = {
   CANCELLED: 'Cancelada',
 };
 
-export const canStartDelivery = (delivery: Delivery) => delivery.status === 'ASSIGNED' && delivery.orderStatus === 'READY';
-export const canCompleteDelivery = (delivery: Delivery) => delivery.status === 'IN_PROGRESS' && delivery.orderStatus === 'OUT_FOR_DELIVERY';
-export const isDeliveryActive = (delivery: Delivery) => delivery.status === 'ASSIGNED' || delivery.status === 'IN_PROGRESS';
+export const canStartDelivery = (delivery: Delivery) => !delivery.localCompletion && delivery.status === 'ASSIGNED' && delivery.orderStatus === 'READY';
+export const canCompleteDelivery = (delivery: Delivery) => !delivery.localCompletion && delivery.status === 'IN_PROGRESS' && delivery.orderStatus === 'OUT_FOR_DELIVERY';
+export const isDeliveryActive = (delivery: Delivery) => !delivery.localCompletion && (delivery.status === 'ASSIGNED' || delivery.status === 'IN_PROGRESS');
 
 /** O mesmo texto é exibido e copiado, incluindo complemento/referência do endereço. */
 export function formatDeliveryAddress(address: DeliveryAddress): string {
@@ -24,6 +24,8 @@ export function formatDeliveryAddress(address: DeliveryAddress): string {
 }
 
 export function deliveryInstruction(delivery: Delivery): string {
+  if (delivery.localCompletion?.status === 'conflict') return 'A confirmação precisa de revisão. Confira a pendência com a proprietária.';
+  if (delivery.localCompletion) return 'Concluída neste aparelho — aguardando sincronização. A marmitaria ainda precisa confirmar.';
   if (delivery.status === 'CANCELLED') return 'Esta entrega foi cancelada pela marmitaria.';
   if (delivery.status === 'COMPLETED') return 'Conclusão confirmada pela marmitaria.';
   if (canStartDelivery(delivery)) return 'O pedido está pronto. Inicie a entrega ao sair da marmitaria.';

@@ -36,9 +36,15 @@ export interface Delivery {
   completedAt: string | null;
   completionReceivedAt: string | null;
   cancelledAt: string | null;
+  /** Metadados locais; não mudam o status oficial recebido da API. */
+  localCompletion?: { status: 'pending' | 'conflict'; completedAt: string; message: string | null };
+  fromCache?: boolean;
+  warning?: unknown;
 }
 
-export interface DeliveryPage { deliveries: Delivery[]; hasMore: boolean }
+export interface DeliveryPage {
+  deliveries: Delivery[]; hasMore: boolean; nextOffset?: number; fromCache?: boolean; warning?: unknown;
+}
 export interface DeliveryCompletion { operationId: string; completedAt: string }
 
 export interface DeliveriesGateway {
@@ -46,6 +52,9 @@ export interface DeliveriesGateway {
   get(id: string): Promise<Delivery>;
   start(id: string): Promise<Delivery>;
   complete(id: string, input: DeliveryCompletion): Promise<Delivery>;
+  cachedGet?(id: string): Promise<Delivery | null>;
+  cachedList?(active: boolean, offset?: number): Promise<DeliveryPage>;
+  subscribeLocal?(listener: () => void): () => void;
 }
 
 /** A identidade do motoboy vem do token; nenhum método aceita um courierId livre. */
@@ -55,3 +64,13 @@ export const deliveriesService: DeliveriesGateway = {
   start: id => api<Delivery>(`/deliveries/${encodeURIComponent(id)}/start`, { method: 'PATCH' }),
   complete: (id, input) => api<Delivery>(`/deliveries/${encodeURIComponent(id)}/complete`, { method: 'POST', body: input }),
 };
+
+/** Requisições da fila são vinculadas à conta de origem mesmo durante um refresh. */
+export function courierSessionGateway(userId: string): DeliveriesGateway {
+  return {
+    list: (active, offset = 0) => api<DeliveryPage>(`/deliveries/me?active=${active}&limit=20&offset=${offset}`, { expectedUserId: userId }),
+    get: id => api<Delivery>(`/deliveries/${encodeURIComponent(id)}`, { expectedUserId: userId }),
+    start: id => api<Delivery>(`/deliveries/${encodeURIComponent(id)}/start`, { method: 'PATCH', expectedUserId: userId }),
+    complete: (id, input) => api<Delivery>(`/deliveries/${encodeURIComponent(id)}/complete`, { method: 'POST', body: input, expectedUserId: userId }),
+  };
+}

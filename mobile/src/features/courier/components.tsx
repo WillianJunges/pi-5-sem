@@ -4,8 +4,12 @@ import type { Delivery } from '../../services/deliveries.service';
 import { colors, spacing } from '../../theme';
 import { getErrorMessage, isConnectionError } from '../../utils/errors';
 import { canStartDelivery, DELIVERY_LABELS } from './presentation';
+import { CourierLocalError } from './offline/types';
 
 export function DeliveryBadge({ delivery }: { delivery: Delivery }) {
+  if (delivery.localCompletion) return <Text style={[styles.badge, { backgroundColor: '#FFF7ED' }]}>
+    {delivery.localCompletion.status === 'conflict' ? 'Confirmação precisa de revisão' : 'Concluída neste aparelho — aguardando sincronização'}
+  </Text>;
   const backgroundColor = delivery.status === 'CANCELLED' ? '#F3F4F6' : delivery.status === 'COMPLETED' ? '#F0FDF4'
     : delivery.status === 'IN_PROGRESS' ? '#F5F3FF' : '#FFF7ED';
   return <Text style={[styles.badge, { backgroundColor }]}>
@@ -19,8 +23,8 @@ export function CourierErrorNotice({ error, stale = false, onRetry, disabled = f
 }) {
   return <View style={styles.notice} accessibilityRole="alert">
     <Text style={styles.noticeTitle}>{isConnectionError(error) ? 'Sem conexão com o servidor' : 'Não foi possível atualizar'}</Text>
-    <Text style={styles.text}>{getErrorMessage(error)}</Text>
-    {stale ? <Text style={styles.text}>Os dados exibidos podem estar desatualizados. Atualize antes de executar uma ação.</Text> : null}
+    <Text style={styles.text}>{error instanceof CourierLocalError ? error.message : getErrorMessage(error)}</Text>
+    {stale ? <Text style={styles.text}>Os dados exibidos podem estar desatualizados. Confira o estado antes de iniciar uma entrega.</Text> : null}
     <Button title="Tentar novamente" variant="outline" onPress={onRetry} disabled={disabled} />
   </View>;
 }

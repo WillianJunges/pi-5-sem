@@ -1,7 +1,7 @@
 import * as Clipboard from 'expo-clipboard';
 import * as Crypto from 'expo-crypto';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { Button } from '../../../../src/components/Button';
 import { EmptyState } from '../../../../src/components/EmptyState';
@@ -10,17 +10,19 @@ import { CourierErrorNotice, courierStyles as styles, DeliveryBadge } from '../.
 import { DeliveryDetailsModel } from '../../../../src/features/courier/models';
 import { canCompleteDelivery, canStartDelivery, deliveryInstruction, formatDeliveryAddress, isDeliveryActive } from '../../../../src/features/courier/presentation';
 import { useCourierRefresh } from '../../../../src/features/courier/useCourierRefresh';
-import { deliveriesService } from '../../../../src/services/deliveries.service';
+import { useCourierOffline } from '../../../../src/features/courier/offline/CourierOfflineProvider';
 import { orderStatusLabel, PAYMENT_LABEL } from '../../../../src/services/orders.service';
 import { colors } from '../../../../src/theme';
 import { getErrorMessage } from '../../../../src/utils/errors';
 import { formatCurrency } from '../../../../src/utils/format';
 
 function Details({ id }: { id: string }) {
-  const [model] = useState(() => new DeliveryDetailsModel(deliveriesService, id, () => ({
+  const service = useCourierOffline();
+  const [model] = useState(() => new DeliveryDetailsModel(service, id, () => ({
     operationId: Crypto.randomUUID(), completedAt: new Date().toISOString(),
   })));
   const state = useSyncExternalStore(model.subscribe, model.getSnapshot);
+  useEffect(() => service.subscribeLocal(() => void model.refreshLocal()), [service, model]);
   const [copying, setCopying] = useState(false);
   useCourierRefresh(() => model.reload(), () => model.cancelReads(), !!state.delivery && isDeliveryActive(state.delivery));
 
@@ -33,7 +35,7 @@ function Details({ id }: { id: string }) {
   }
 
   const address = formatDeliveryAddress(delivery.address);
-  const disabled = state.stale || state.loading || state.busy !== null;
+  const startDisabled = state.stale || state.loading || state.busy !== null;
 
   async function copyAddress() {
     if (copying) return;
@@ -53,7 +55,7 @@ function Details({ id }: { id: string }) {
     ]);
   }
   function confirmCompletion() {
-    Alert.alert('O pedido foi entregue?', 'Confirme somente depois de entregar o pedido ao cliente.', [
+    Alert.alert('O pedido foi entregue?', 'Confirme somente depois de entregar o pedido ao cliente. Sem conexão, a confirmação ficará salva para sincronizar depois.', [
       { text: 'Voltar', style: 'cancel' },
       { text: 'Sim, concluir entrega', onPress: () => void model.complete() },
     ]);
@@ -73,7 +75,8 @@ function Details({ id }: { id: string }) {
 
     {state.error ? <CourierErrorNotice error={state.error} stale={state.stale} onRetry={() => void model.reload()} disabled={!!state.busy || state.loading} /> : null}
     {state.pendingCompletion ? <View style={styles.card} accessibilityRole="alert">
-      <Text style={styles.text}>A conclusão ainda não foi confirmada. Confira o estado da entrega antes de tentar novamente.</Text>
+      <Text style={styles.text}>{delivery.localCompletion?.message ?? 'A conclusão está salva neste aparelho. A marmitaria será atualizada após a sincronização.'}</Text>
+      <Button title="Ver pendências" variant="outline" onPress={() => router.push('/courier/pending')} />
     </View> : null}
 
     <View style={styles.card}>
@@ -99,9 +102,10 @@ function Details({ id }: { id: string }) {
       </Text> : null}
     </View>
 
-    {canStartDelivery(delivery) ? <Button title="Iniciar entrega" disabled={disabled} loading={state.busy === 'start'} onPress={confirmStart} /> : null}
-    {canCompleteDelivery(delivery) ? <Button title="Concluir entrega" disabled={disabled} loading={state.busy === 'complete'} onPress={confirmCompletion} /> : null}
-    {isDeliveryActive(delivery) ? <Text style={styles.muted}>É necessário ter conexão para confirmar as ações. Puxe para baixo para atualizar.</Text> : null}
+    {canStartDelivery(delivery) ? <Button title="Iniciar entrega" disabled={startDisabled} loading={state.busy === 'start'} onPress={confirmStart} /> : null}
+    {canCompleteDelivery(delivery) ? <Button title="Concluir entrega" disabled={state.busy !== null} loading={state.busy === 'complete'} onPress={confirmCompletion} /> : null}
+    {isDeliveryActive(delivery) ? <Text style={styles.muted}>O início exige conexão. A conclusão pode ser salva neste aparelho e sincronizada depois.</Text> : null}
+    {delivery.fromCache ? <Text style={styles.muted}>Exibindo dados salvos neste aparelho.</Text> : null}
     {delivery.startedAt ? <Text style={styles.muted}>Iniciada em {new Date(delivery.startedAt).toLocaleString('pt-BR')}</Text> : null}
     {delivery.completedAt ? <Text style={styles.muted}>Concluída em {new Date(delivery.completedAt).toLocaleString('pt-BR')}</Text> : null}
     {delivery.cancelledAt ? <Text style={styles.muted}>Cancelada em {new Date(delivery.cancelledAt).toLocaleString('pt-BR')}</Text> : null}
