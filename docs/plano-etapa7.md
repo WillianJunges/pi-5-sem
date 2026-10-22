@@ -49,8 +49,10 @@ Android Studio**. Para essa preparação, foi acrescentado o perfil APK via EAS 
 `mobile/eas.json`; veja [apk-android.md](apk-android.md). Ele permite compilar na
 nuvem sem SDK no Windows. Login e vínculo Expo foram confirmados, assim como acesso
 à API pelo navegador Android em `http://192.168.15.7:3333/health`. O perfil de teste
-permite HTTP para essa rede; ainda faltam definir a variável da API no EAS e compilar.
-Ainda não foi gerado APK nem executado ensaio físico do aplicativo.
+permite HTTP para essa rede. Depois, o usuário confirmou build concluído, instalação
+do APK e login como motoboy no Android 16. Os ensaios completos continuam pendentes.
+O comando `db:seed:courier` prepara os dados fictícios da primeira entrega, conforme
+[teste-apk-motoboy.md](teste-apk-motoboy.md), sem recompilar o aplicativo.
 
 ## Critério de conclusão
 

@@ -12,7 +12,8 @@
     "user:create": "tsx scripts/create-user.ts",
     "test": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
-    "db:seed:catalog": "tsx scripts/seed-catalog.ts"
+    "db:seed:catalog": "tsx scripts/seed-catalog.ts",
+    "db:seed:courier": "tsx scripts/seed-courier-delivery.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

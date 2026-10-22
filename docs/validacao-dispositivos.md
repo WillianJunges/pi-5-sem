@@ -1,7 +1,8 @@
 # Registro de validação em dispositivos — etapa 7
 
-Estado inicial: **nenhum ensaio físico executado**. Este arquivo é a matriz de
-execução e registro, não uma evidência de aprovação.
+Estado atual: **APK instalado e login como motoboy confirmados pelo usuário**.
+Os casos completos abaixo ainda não foram executados. Este arquivo registra
+observações, sem tratar preparação ou login como aprovação da matriz.
 
 Base preparada: `a192541`, branch `rastreamento-motorista`.
 Roteiros de instalação e operação: [etapa 5](teste-etapa5.md) e
@@ -15,8 +16,8 @@ Preencher no início de cada sessão:
 - Data e horário com fuso:
 - Responsável pelo ensaio:
 - Fabricante/modelo: pendente; versão Android informada pelo usuário: 16
-- Commit instalado e tipo de build: instalação pendente; APK ainda não gerado
-- Local de execução da API e commit do backend:
+- Commit instalado e tipo de build: APK EAS preview instalado; SHA instalado não conferido
+- Local de execução da API e commit do backend: Windows, `http://192.168.15.7:3333`; SHA não conferido
 - Conexão: Wi-Fi/dados móveis/USB; condições de bateria:
 - Permissões de GPS, segundo plano e notificações:
 - Sessão de cliente usada para acompanhar: segundo aparelho ou emulador:
@@ -46,7 +47,7 @@ resultado observado pelo comportamento esperado abaixo.
 | D10 — chegada | Ativar alerta local; entrar na área com precisão adequada; permanecer/sair/voltar | Pergunta local, sem repetição contínua e sem conclusão automática | NÃO EXECUTADO |
 | D11 — permissões e GPS | Negar/revogar notificação, revogar GPS e desligar localização; restaurar | Mensagem adequada e recuperação; negar aviso não bloqueia ações logísticas | NÃO EXECUTADO |
 | D12 — sessão | Sair com pendências, entrar em outra conta e tocar em aviso antigo | Sem acesso a dados da anterior; pendências preservadas para a conta responsável | NÃO EXECUTADO |
-| D13 — push real | Com Expo/FCM configurado, atribuir/trocar/cancelar/iniciar; testar aberto/minimizado/bloqueado | Aviso no destinatário correto; toque consulta estado oficial antes de abrir | BLOQUEADO — falta configurar Expo/EAS e FCM |
+| D13 — push real | Com Expo/FCM configurado, atribuir/trocar/cancelar/iniciar; testar aberto/minimizado/bloqueado | Aviso no destinatário correto; toque consulta estado oficial antes de abrir | BLOQUEADO — FCM pendente; projeto Expo/EAS vinculado |
 | D14 — encerramento pelo SO | Encerrar app/ativar economia de bateria e reabrir | Registrar limite real; retomada consistente, sem prometer coleta com processo encerrado | NÃO EXECUTADO |
 
 ## Registrar cada execução
@@ -70,7 +71,8 @@ Resultado do reteste:
 ## Limites da evidência atual
 
 As etapas anteriores passaram em testes automatizados e exportação Android/Hermes.
-Isso não produz um APK instalado, não comprova localização nativa e não confirma
-recebimento de notificações pelo sistema. A matriz permanece pendente até a
-execução no aparelho. Uma aprovação em um modelo/versão Android não é evidência
+Separadamente, o usuário confirmou instalação do APK e login no Android 16. O login
+inicial demorou porque o aparelho havia saído da rede da API e funcionou após
+reconectar. GPS, recebimento de notificações e os casos completos da matriz ainda
+dependem de execução no aparelho. Uma aprovação em um modelo/versão Android não é evidência
 automática para todos os fabricantes ou para iOS.

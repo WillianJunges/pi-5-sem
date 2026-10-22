@@ -90,9 +90,11 @@ teste. O usuário confirmou login Expo e vínculo do projeto no Windows. O naveg
 do Android acessou `http://192.168.15.7:3333/health`; a API retornou bancos saudáveis.
 MySQL no Windows usa porta de host 3307 e `DB_PORT=3307` no backend.
 
-A variável de API no EAS e a compilação ainda precisam ser executadas no Windows.
-Nenhum APK foi gerado ou instalado, e nenhum build foi iniciado neste ambiente cloud.
-O sucesso no navegador confirma a rede, mas ainda não comprova a conexão pelo APK.
+O usuário concluiu o build EAS pelo Windows, instalou e abriu o APK no Android 16.
+Relatou login bem-sucedido como motoboy depois de reconectar à rede Wi-Fi da API.
+Nenhum build foi executado neste ambiente cloud. Para preparar a primeira entrega,
+seguir [teste-apk-motoboy.md](teste-apk-motoboy.md).
 
 Compilar APK e executar os ensaios em Android 16 são passos distintos. Os testes da
-[matriz de dispositivos](validacao-dispositivos.md) continuam sem execução física.
+[matriz de dispositivos](validacao-dispositivos.md) continuam pendentes; instalar e
+entrar no app não comprova navegação completa, GPS ou notificações.
