@@ -181,6 +181,10 @@ Abas da proprietária, no mesmo padrão das abas do Cliente:
 - **Taxas**: faixas em km e reais, `fee-form` para criar, editar e remover, e simulação da taxa por distância.
 - **Pedidos**: em andamento e finalizados. Tocar abre `order/[id]`: itens, cliente, endereço, pagamento
   e o botão do próximo passo (confirmar, iniciar preparo, marcar como pronto), além de cancelar.
+  Nos pedidos de entrega, o card **Entrega** mostra a situação e o motoboy, e o botão
+  "Atribuir motoboy" (ou "Trocar motoboy") abre a lista de motoboys ativos. A entrega é criada
+  sozinha na confirmação (trigger `trg_orders_delivery_logistics`); a troca vale até o motoboy sair.
+  Rotas usadas: `GET /deliveries/order/:id` e `POST /owner/deliveries/:id/assign` (`{ courierId }`).
 - **Conta**: motoboys (`couriers`, `courier-form`: cadastrar, editar, desativar e reativar), perfil e sair.
 
 As chamadas ficam em `mobile/src/services/owner.service.ts`. As regras continuam no backend: as telas
@@ -188,5 +192,4 @@ mostram a mensagem de erro que a API devolve (ex.: produto já vendido não pode
 
 ## Próximos passos do módulo
 
-- Atribuição de entregas aos motoboys (falta combinar com o módulo do Motoboy quem cria a entrega)
 - Notificações da proprietária
