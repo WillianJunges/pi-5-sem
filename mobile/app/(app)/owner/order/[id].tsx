@@ -3,10 +3,16 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../../../../src/components/Button';
 import { EmptyState } from '../../../../src/components/EmptyState';
+import { DELIVERY_LABELS } from '../../../../src/features/courier/presentation';
+import { CourierPickerSheet } from '../../../../src/features/owner/CourierPickerSheet';
 import { addressLine, formatCep } from '../../../../src/services/addresses.service';
+import { ApiError } from '../../../../src/services/api';
+import type { Delivery } from '../../../../src/services/deliveries.service';
 import { orderStatusLabel, PAYMENT_LABEL } from '../../../../src/services/orders.service';
 import {
   CANCELLABLE,
+  canAssignCourier,
+  type Courier,
   NEXT_ACTION,
   type OwnerOrder,
   PICKUP_ACTION,
@@ -32,6 +38,7 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: 
  * Pedido para a proprietária (item 5): itens, cliente, entrega, pagamento e as ações
  * confirmar → iniciar preparo → marcar como pronto, além de cancelar (até "pronto").
  * Na retirada no local (módulo do Cliente), "pronto" → "marcar como retirado".
+ * Na entrega, o card "Entrega" mostra o motoboy e permite atribuir/trocar até ele sair.
  */
 export default function OwnerOrderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -39,6 +46,10 @@ export default function OwnerOrderScreen() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [delivery, setDelivery] = useState<Delivery | null>(null);
+  const [deliveryError, setDeliveryError] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [assigning, setAssigning] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -53,9 +64,29 @@ export default function OwnerOrderScreen() {
     load();
   }, [load]);
 
+  // A entrega só existe depois da confirmação; recarrega a cada mudança de status do pedido.
+  const hasDelivery = order?.fulfillment === 'DELIVERY' && order.status !== 'PENDING';
+  const loadDelivery = useCallback(async () => {
+    if (!hasDelivery) {
+      setDelivery(null);
+      return;
+    }
+    try {
+      setDelivery(await ownerService.deliveries.forOrder(id));
+      setDeliveryError(null);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) setDelivery(null);
+      else setDeliveryError(getErrorMessage(err));
+    }
+  }, [id, hasDelivery]);
+
+  useEffect(() => {
+    loadDelivery();
+  }, [loadDelivery, order?.status]);
+
   async function handleRefresh() {
     setRefreshing(true);
-    await load();
+    await Promise.all([load(), loadDelivery()]);
     setRefreshing(false);
   }
 
@@ -69,6 +100,32 @@ export default function OwnerOrderScreen() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function assign(courier: Courier) {
+    if (!delivery) return;
+    setPickerOpen(false);
+    setAssigning(true);
+    try {
+      setDelivery(await ownerService.deliveries.assign(delivery.id, courier.id));
+      setDeliveryError(null);
+    } catch (err) {
+      Alert.alert('Não foi possível atribuir', getErrorMessage(err));
+      await loadDelivery(); // ex.: o motoboy já saiu ou foi desativado
+    } finally {
+      setAssigning(false);
+    }
+  }
+
+  function pickCourier(courier: Courier) {
+    if (!delivery?.courierId) {
+      assign(courier);
+      return;
+    }
+    Alert.alert('Trocar motoboy?', `A entrega sai de ${delivery.courierName ?? 'outro motoboy'} e vai para ${courier.name}.`, [
+      { text: 'Voltar', style: 'cancel' },
+      { text: 'Trocar', onPress: () => assign(courier) },
+    ]);
   }
 
   function confirmCancel() {
@@ -120,8 +177,46 @@ export default function OwnerOrderScreen() {
       ) : null}
       {order.status === 'READY' ? (
         <Text style={styles.notice}>
-          {pickup ? 'Pronto: aguardando o cliente buscar.' : 'Pronto: aguardando a saída para entrega.'}
+          {pickup
+            ? 'Pronto: aguardando o cliente buscar.'
+            : delivery && !delivery.courierId
+              ? 'Pronto, mas ainda sem motoboy: atribua um para a entrega sair.'
+              : 'Pronto: aguardando o motoboy sair para a entrega.'}
         </Text>
+      ) : null}
+
+      {hasDelivery ? (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Entrega</Text>
+          {delivery ? (
+            <>
+              <Row label="Situação" value={DELIVERY_LABELS[delivery.status]} />
+              <Row label="Motoboy" value={delivery.courierName ?? 'Nenhum ainda'} />
+              {delivery.assignedAt ? <Row label="Atribuída às" value={time(delivery.assignedAt)} /> : null}
+              {delivery.startedAt ? <Row label="Saiu às" value={time(delivery.startedAt)} /> : null}
+              {delivery.completedAt ? <Row label="Entregue às" value={time(delivery.completedAt)} /> : null}
+              {canAssignCourier(delivery) ? (
+                <View style={styles.assign}>
+                  <Button
+                    title={delivery.courierId ? 'Trocar motoboy' : 'Atribuir motoboy'}
+                    variant={delivery.courierId ? 'outline' : 'primary'}
+                    onPress={() => setPickerOpen(true)}
+                    loading={assigning}
+                  />
+                </View>
+              ) : null}
+            </>
+          ) : deliveryError ? (
+            <>
+              <Text style={styles.error}>{deliveryError}</Text>
+              <Pressable onPress={loadDelivery} hitSlop={8}>
+                <Text style={styles.retry}>Tentar de novo</Text>
+              </Pressable>
+            </>
+          ) : (
+            <ActivityIndicator color={colors.primary} />
+          )}
+        </View>
       ) : null}
 
       <View style={styles.card}>
@@ -179,6 +274,13 @@ export default function OwnerOrderScreen() {
           </Text>
         ) : null}
       </View>
+
+      <CourierPickerSheet
+        visible={pickerOpen}
+        currentCourierId={delivery?.courierId ?? null}
+        onPick={pickCourier}
+        onClose={() => setPickerOpen(false)}
+      />
     </ScrollView>
   );
 }
@@ -209,5 +311,8 @@ const styles = StyleSheet.create({
   text: { fontSize: 15, color: colors.text, flexShrink: 1 },
   bold: { fontWeight: 'bold', fontSize: 16 },
   muted: { fontSize: 13, color: colors.muted },
+  assign: { marginTop: spacing.sm },
+  error: { fontSize: 14, color: colors.danger },
+  retry: { fontSize: 15, fontWeight: '600', color: colors.primary },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: spacing.xs },
 });

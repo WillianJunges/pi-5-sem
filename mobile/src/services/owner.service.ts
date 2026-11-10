@@ -1,4 +1,5 @@
 import { api } from './api';
+import type { Delivery, DeliveryStatus } from './deliveries.service';
 import type { Order, OrderStatus, OrderSummary } from './orders.service';
 
 /**
@@ -151,6 +152,18 @@ export interface CourierInput {
   phone: string | null;
 }
 
+// ---------- Entregas (atribuição de motoboy) ----------
+
+/**
+ * A entrega nasce sozinha (trigger trg_orders_delivery_logistics) quando um pedido de entrega
+ * é confirmado. A proprietária só escolhe o motoboy, e pode trocar enquanto ele não saiu.
+ */
+export const ASSIGNABLE_DELIVERY: DeliveryStatus[] = ['WAITING_ASSIGNMENT', 'ASSIGNED'];
+export const ASSIGNABLE_ORDER: OrderStatus[] = ['CONFIRMED', 'PREPARING', 'READY'];
+
+export const canAssignCourier = (delivery: Delivery) =>
+  ASSIGNABLE_DELIVERY.includes(delivery.status) && ASSIGNABLE_ORDER.includes(delivery.orderStatus);
+
 // ---------- Auxiliares ----------
 
 /** "22,50" / "22.5" / " 22 " → 22.5; texto vazio ou inválido → NaN */
@@ -229,6 +242,13 @@ export const ownerService = {
     update: (id: string, data: CourierInput) => api<Courier>(`/owner/couriers/${id}`, { method: 'PUT', body: data }),
     setActive: (id: string, active: boolean) =>
       api<Courier>(`/owner/couriers/${id}/active`, { method: 'PATCH', body: { active } }),
+  },
+
+  deliveries: {
+    /** 404 enquanto o pedido não foi confirmado (a entrega ainda não existe). */
+    forOrder: (orderId: string) => api<Delivery>(`/deliveries/order/${orderId}`),
+    assign: (id: string, courierId: string) =>
+      api<Delivery>(`/owner/deliveries/${id}/assign`, { method: 'POST', body: { courierId } }),
   },
 
   fees: {
