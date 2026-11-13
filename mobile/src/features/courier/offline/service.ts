@@ -220,7 +220,9 @@ export class CourierOfflineService implements DeliveriesGateway {
       } catch (error) {
         const status = statusOf(error);
         const conflict = status === 400 || status === 404 || status === 409 || status === 422;
-        const message = conflict ? 'A entrega mudou ou a confirmação foi recusada. Confira com a proprietária.'
+        const serverMessage = (error as { message?: unknown } | null)?.message;
+        const message = conflict ? (status === 409 && typeof serverMessage === 'string' && serverMessage.trim()
+          ? serverMessage : 'A entrega mudou ou a confirmação foi recusada. Confira o pedido com a proprietária.')
           : status === 401 || status === 403 ? 'Entre novamente com a conta responsável para sincronizar.'
             : 'A confirmação ainda não chegou. Vamos tentar novamente em instantes.';
         const delay = Math.min(300_000, 5_000 * 2 ** Math.min(item.attempts - 1, 6));

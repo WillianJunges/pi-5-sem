@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDistance, MAP_HTML, mapUpdateScript, straightDistance, validPoint } from '../src/features/tracking/mapHtml';
+import { createMapHtml, formatDistance, MAP_HTML, mapUpdateScript, straightDistance, validPoint } from '../src/features/tracking/mapHtml';
 
 const fatec = { latitude: -23.085755, longitude: -47.202467 };
 
@@ -35,5 +35,10 @@ describe('mapa da entrega (8b)', () => {
   it('carrega o Leaflet com verificação de integridade', () => {
     expect(MAP_HTML).toContain('leaflet@1.9.4/dist/leaflet.js');
     expect(MAP_HTML).toMatch(/integrity="sha256-/);
+  });
+
+  it('inclui a chave codificada na URL das imagens do mapa', () => {
+    const html = createMapHtml('teste&outra=1</script>');
+    expect(html).toContain('?key=teste%26outra%3D1%3C%2Fscript%3E');
   });
 });

@@ -53,6 +53,12 @@ O APK não inclui a API, MySQL ou MongoDB. Esses serviços precisam estar dispon
 separadamente para login e operações online. Configuração pública de API alterada
 depois da compilação exige gerar outro APK neste fluxo.
 
+O mapa também usa `EXPO_PUBLIC_CARTO_API_KEY`. Para desenvolvimento, defina-a em
+`mobile/.env` e reinicie o Expo. Para compilar pelo EAS, configure a variável no
+ambiente EAS `preview`. Variáveis `EXPO_PUBLIC_` ficam visíveis no aplicativo:
+a chave da CARTO não é um segredo. Consulte as condições, limites e restrições no
+painel da CARTO e mantenha a atribuição do mapa visível.
+
 ## Compilar no serviço usando o Windows
 
 Na cópia atualizada da branch `rastreamento-motorista`, com login e vínculo EAS
