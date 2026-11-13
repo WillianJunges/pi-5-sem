@@ -11,7 +11,9 @@
       "supportsTablet": true
     },
     "android": {
-      "permissions": ["android.permission.POST_NOTIFICATIONS"],
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -28,13 +30,22 @@
       "expo-secure-store",
       "expo-sqlite",
       "expo-notifications",
-      ["expo-location", {
-        "locationWhenInUsePermission": "Sua localização é compartilhada com o cliente durante entregas em andamento.",
-        "locationAlwaysAndWhenInUsePermission": "Permita compartilhar sua localização durante entregas em andamento, inclusive com a tela bloqueada.",
-        "isIosBackgroundLocationEnabled": true,
-        "isAndroidBackgroundLocationEnabled": true,
-        "isAndroidForegroundServiceEnabled": true
-      }]
-    ]
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Sua localização é compartilhada com o cliente durante entregas em andamento.",
+          "locationAlwaysAndWhenInUsePermission": "Permita compartilhar sua localização durante entregas em andamento, inclusive com a tela bloqueada.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "4c4a6be5-7bf7-439f-92bc-5be25d833d24"
+      }
+    }
   }
 }

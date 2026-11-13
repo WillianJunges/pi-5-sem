@@ -60,6 +60,26 @@ describe('Cardápios', () => {
   }
 
   describe('montagem', () => {
+    it('copia o modelo do dia sem abrir a marmitaria e preserva o modelo', async () => {
+      const template = await menus.create({ name: 'Quinta', menuDate: TODAY, weekday: 4 });
+      await menus.addItem(template.id, media().id, 1990);
+      await expectAppError(menus.activate(template.id), 409, /modelo semanal/);
+      const copy = await menus.prepareWeekly(template.id);
+      expect(copy).toMatchObject({ menuDate: TODAY, status: 'DRAFT' });
+      expect(copy.items[0]).toMatchObject({ variantId: media().id, specialPriceCents: 1990 });
+      expect(await menus.getToday()).toBeNull();
+      await menus.activate(copy.id);
+      expect((await menus.getToday())?.menuId).toBe(copy.id);
+      expect((await menus.get(template.id)).status).toBe('DRAFT');
+      today = '2026-10-16';
+      expect(await menus.getToday()).toBeNull();
+      await expectAppError(menus.prepareWeekly(template.id), 409, /dia de hoje/);
+    });
+
+    it('não permite dois modelos para o mesmo dia', async () => {
+      await menus.create({ name: 'Quinta', menuDate: TODAY, weekday: 4 });
+      await expectAppError(menus.create({ name: 'Outra quinta', menuDate: TODAY, weekday: 4 }), 409, /Já existe/);
+    });
     it('cria em rascunho e mostra nomes, preço padrão, especial e o preço que vale', async () => {
       const m = await draftWithItems();
       expect(m.status).toBe('DRAFT');
@@ -126,7 +146,7 @@ describe('Cardápios', () => {
     it('só um cardápio ativo por vez', async () => {
       const a = await draftWithItems();
       await menus.activate(a.id);
-      const b = await menus.create({ name: 'Cardápio de sexta', menuDate: '2026-10-16' });
+      const b = await menus.create({ name: 'Cardápio especial', menuDate: TODAY });
       await menus.addItem(b.id, lata().id, null);
       await expectAppError(menus.activate(b.id), 409, /Cardápio de quinta/);
       await menus.close(a.id);
@@ -216,10 +236,26 @@ describe('Cardápios', () => {
     });
 
     it('cardápio ativo de outro dia não aparece como "de hoje"', async () => {
-      const m = await draftWithItems('2026-10-14');
+      const m = await draftWithItems();
       await menus.activate(m.id);
+      today = '2026-10-16';
       expect(await menus.getToday()).toBeNull();
       await expectAppError(menus.priceForOrder(media().id), 409);
+    });
+
+    it('encerra o cardápio anterior ao abrir o de hoje', async () => {
+      const previous = await draftWithItems();
+      await menus.activate(previous.id);
+      today = '2026-10-16';
+      const next = await draftWithItems(today);
+      await menus.activate(next.id);
+      expect((await menus.get(previous.id)).status).toBe('CLOSED');
+      expect((await menus.getToday())?.menuId).toBe(next.id);
+    });
+
+    it('não permite aprovar cardápios de outra data', async () => {
+      const future = await draftWithItems('2026-10-16');
+      await expectAppError(menus.activate(future.id), 409, /próprio dia/);
     });
 
     it('produto desativado durante o dia some para o cliente na hora (inclusive na cópia)', async () => {

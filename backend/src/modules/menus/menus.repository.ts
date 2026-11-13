@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { RowDataPacket } from 'mysql2/promise';
 import { db } from '../../config/database';
+import { AppError } from '../../shared/errors/AppError';
 import { translateDatabaseError } from '../../shared/errors/databaseErrors';
 import { centsToDecimal, decimalToCents } from '../../shared/utils/money';
 import type { Menu, MenuItem, MenuItemDetail, MenuStatus } from './menu.types';
@@ -11,8 +12,9 @@ export interface MenusRepository {
   findActive(): Promise<Menu | null>;
   /** Itens com nomes e preços (view vw_menu_items). */
   itemDetails(menuId: string): Promise<MenuItemDetail[]>;
-  create(data: { name: string; menuDate: string }): Promise<Menu>;
-  update(id: string, data: { name: string; menuDate: string }): Promise<void>;
+  create(data: { name: string; menuDate: string; weekday?: number | null }): Promise<Menu>;
+  update(id: string, data: { name: string; menuDate: string; weekday?: number | null }): Promise<void>;
+  prepareWeekly?(id: string, date: string): Promise<Menu>;
   /** DRAFT → ACTIVE com as consistências e o bloqueio da procedure sp_activate_menu. */
   activate(id: string): Promise<void>;
   close(id: string): Promise<void>;
@@ -27,6 +29,7 @@ interface MenuRow extends RowDataPacket {
   id: string;
   name: string;
   menu_date: Date | string;
+  weekday: number | null;
   status: MenuStatus;
   activated_at: Date | null;
   closed_at: Date | null;
@@ -77,6 +80,7 @@ export class MySqlMenusRepository implements MenusRepository {
       id: r.id,
       name: r.name,
       menuDate: toIsoDate(r.menu_date),
+      weekday: r.weekday,
       status: r.status,
       activatedAt: r.activated_at,
       closedAt: r.closed_at,
@@ -121,14 +125,47 @@ export class MySqlMenusRepository implements MenusRepository {
     }));
   }
 
-  async create(data: { name: string; menuDate: string }) {
+  async create(data: { name: string; menuDate: string; weekday?: number | null }) {
     const id = randomUUID();
-    await db.query('INSERT INTO menus (id, name, menu_date) VALUES (?, ?, ?)', [id, data.name, data.menuDate]);
+    try {
+      await db.query('INSERT INTO menus (id, name, menu_date, weekday) VALUES (?, ?, ?, ?)', [id, data.name, data.menuDate, data.weekday ?? null]);
+    } catch (err) {
+      if ((err as { code?: string }).code === 'ER_DUP_ENTRY') throw new AppError('Já existe um modelo para esse dia da semana.', 409);
+      throw err;
+    }
     return (await this.findById(id))!;
   }
 
-  async update(id: string, data: { name: string; menuDate: string }) {
-    await db.query('UPDATE menus SET name = ?, menu_date = ? WHERE id = ?', [data.name, data.menuDate, id]);
+  async update(id: string, data: { name: string; menuDate: string; weekday?: number | null }) {
+    try {
+      await db.query('UPDATE menus SET name = ?, menu_date = ?, weekday = ? WHERE id = ?', [data.name, data.menuDate, data.weekday ?? null, id]);
+    } catch (err) {
+      if ((err as { code?: string }).code === 'ER_DUP_ENTRY') throw new AppError('Já existe um modelo para esse dia da semana.', 409);
+      throw err;
+    }
+  }
+
+  async prepareWeekly(id: string, date: string): Promise<Menu> {
+    const conn = await db.getConnection();
+    const copyId = randomUUID();
+    try {
+      await conn.beginTransaction();
+      const [rows] = await conn.query<MenuRow[]>('SELECT * FROM menus WHERE id = ? FOR UPDATE', [id]);
+      const template = rows[0];
+      if (!template || template.weekday == null || template.status !== 'DRAFT') throw new Error('Modelo semanal não encontrado');
+      await conn.query('INSERT INTO menus (id, name, menu_date) VALUES (?, ?, ?)', [copyId, template.name, date]);
+      const [items] = await conn.query<ItemRow[]>('SELECT * FROM menu_items WHERE menu_id = ?', [id]);
+      for (const item of items) {
+        await conn.query('INSERT INTO menu_items (id, menu_id, variant_id, special_price) VALUES (?, ?, ?, ?)', [randomUUID(), copyId, item.variant_id, item.special_price]);
+      }
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+    return (await this.findById(copyId))!;
   }
 
   async activate(id: string) {

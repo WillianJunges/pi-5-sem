@@ -183,7 +183,7 @@ export class MemoryMenusRepository implements MenusRepository {
       });
   }
 
-  async create(data: { name: string; menuDate: string }) {
+  async create(data: { name: string; menuDate: string; weekday?: number | null }) {
     const row: MenuRow = { id: randomUUID(), ...data, status: 'DRAFT', activatedAt: null, closedAt: null };
     this.db.menus.push(row);
     return this.assemble(row);
@@ -191,6 +191,13 @@ export class MemoryMenusRepository implements MenusRepository {
 
   async update(id: string, data: { name: string; menuDate: string }) {
     Object.assign(this.db.menus.find((m) => m.id === id)!, data);
+  }
+
+  async prepareWeekly(id: string, date: string) {
+    const source = (await this.findById(id))!;
+    const copy = await this.create({ name: source.name, menuDate: date });
+    for (const item of source.items) await this.addItem(copy.id, item.variantId, item.specialPriceCents);
+    return (await this.findById(copy.id))!;
   }
 
   async activate(id: string) {

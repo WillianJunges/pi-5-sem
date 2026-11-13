@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../../../src/components/Button';
 import { TextField } from '../../../src/components/TextField';
 import { ownerService } from '../../../src/services/owner.service';
@@ -8,6 +8,8 @@ import { colors, spacing } from '../../../src/theme';
 import { todayISODate } from '../../../src/utils/date';
 import { getErrorMessage } from '../../../src/utils/errors';
 import { formatLongDate } from '../../../src/utils/format';
+
+const DAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
 /** Confere se "AAAA-MM-DD" é uma data que existe (ex.: recusa 2026-02-30). */
 function isValidDate(text: string): boolean {
@@ -28,6 +30,7 @@ export default function MenuFormScreen() {
 
   const [name, setName] = useState('');
   const [menuDate, setMenuDate] = useState(todayISODate());
+  const [weekday, setWeekday] = useState<number | null>(null);
   const [loading, setLoading] = useState(editing);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +46,7 @@ export default function MenuFormScreen() {
       .then((menu) => {
         setName(menu.name);
         setMenuDate(menu.menuDate);
+        setWeekday(menu.weekday ?? null);
       })
       .catch((err) => setError(getErrorMessage(err)))
       .finally(() => setLoading(false));
@@ -53,7 +57,7 @@ export default function MenuFormScreen() {
     if (name.trim().length < 2) return setError('Informe o nome do cardápio.');
     if (!isValidDate(menuDate.trim())) return setError('Informe a data no formato AAAA-MM-DD (ex.: 2026-10-20).');
 
-    const data = { name: name.trim(), menuDate: menuDate.trim() };
+    const data = { name: name.trim(), menuDate: menuDate.trim(), weekday };
     setSaving(true);
     try {
       if (id) {
@@ -89,7 +93,12 @@ export default function MenuFormScreen() {
           onChangeText={setName}
           maxLength={120}
         />
-        <View style={styles.dateField}>
+        <Text>Tipo de cardápio</Text>
+        <View style={styles.choices}>
+          <Pressable onPress={() => setWeekday(null)}><Text style={weekday === null ? styles.selected : styles.choice}>Especial por data</Text></Pressable>
+          {DAYS.map((day, i) => <Pressable key={day} onPress={() => setWeekday(i)}><Text style={weekday === i ? styles.selected : styles.choice}>{day}</Text></Pressable>)}
+        </View>
+        {weekday === null ? <View style={styles.dateField}>
           <TextField
             label="Dia (AAAA-MM-DD)"
             placeholder="2026-10-20"
@@ -99,7 +108,7 @@ export default function MenuFormScreen() {
             maxLength={10}
           />
           {dateOk ? <Text style={styles.datePreview}>{formatLongDate(menuDate.trim())}</Text> : null}
-        </View>
+        </View> : <Text>Este modelo será sugerido toda {DAYS[weekday].toLowerCase()}. A abertura exige aprovação no dia.</Text>}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -116,4 +125,7 @@ const styles = StyleSheet.create({
   dateField: { gap: spacing.xs },
   datePreview: { fontSize: 13, color: colors.muted, textTransform: 'capitalize' },
   error: { fontSize: 14, color: colors.danger },
+  choices: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  choice: { padding: spacing.sm, color: colors.text, backgroundColor: colors.surface, borderRadius: 8 },
+  selected: { padding: spacing.sm, color: '#fff', backgroundColor: colors.primary, borderRadius: 8 },
 });

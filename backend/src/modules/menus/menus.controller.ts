@@ -38,6 +38,10 @@ export const menusController = {
     res.json(presentMenu(await menusService.activate(idParam(req))));
   },
 
+  async prepareWeekly(req: Request, res: Response) {
+    res.status(201).json(presentMenu(await menusService.prepareWeekly(idParam(req))));
+  },
+
   async close(req: Request, res: Response) {
     res.json(presentMenu(await menusService.close(idParam(req))));
   },

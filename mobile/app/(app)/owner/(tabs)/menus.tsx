@@ -19,6 +19,7 @@ const SECTIONS: { status: MenuStatus; title: string }[] = [
   { status: 'DRAFT', title: 'Rascunhos' },
   { status: 'CLOSED', title: 'Encerrados' },
 ];
+const DAYS = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 
 function MenuCard({ menu }: { menu: MenuSummary }) {
   const status = MENU_STATUS_COLORS[menu.status];
@@ -33,7 +34,7 @@ function MenuCard({ menu }: { menu: MenuSummary }) {
           {MENU_STATUS_LABEL[menu.status]}
         </Text>
       </View>
-      <Text style={styles.date}>{formatLongDate(menu.menuDate)}</Text>
+      <Text style={styles.date}>{menu.weekday != null ? `Modelo semanal · ${DAYS[menu.weekday]}` : formatLongDate(menu.menuDate)}</Text>
       <Text style={styles.muted}>
         {menu.itemCount === 1 ? '1 item' : `${menu.itemCount} itens`}
       </Text>
@@ -96,13 +97,18 @@ export default function MenusScreen() {
   const sections = SECTIONS.map((s) => ({
     title: s.title,
     // mais recentes primeiro
-    data: menus.filter((m) => m.status === s.status).sort((a, b) => b.menuDate.localeCompare(a.menuDate)),
+    data: menus.filter((m) => m.status === s.status && m.weekday == null).sort((a, b) => b.menuDate.localeCompare(a.menuDate)),
   })).filter((s) => s.data.length > 0);
+  const templates = menus.filter((m) => m.weekday != null).sort((a, b) => a.weekday! - b.weekday!);
+  if (templates.length) sections.unshift({ title: 'Modelos semanais', data: templates });
+  const today = new Date().getDay();
+  const todayTemplate = templates.find((m) => m.weekday === today);
 
   return (
     <View style={styles.container}>
       <SectionList
         sections={sections}
+        ListHeaderComponent={todayTemplate ? <Pressable style={styles.card} onPress={() => router.push(`/owner/menu/${todayTemplate.id}`)}><Text style={styles.name}>Modelo de hoje: {todayTemplate.name}</Text><Text style={styles.muted}>Toque para preparar e aprovar o cardápio.</Text></Pressable> : <Text style={styles.muted}>Sem modelo semanal para hoje. Você pode criar um cardápio especial.</Text>}
         keyExtractor={(m) => m.id}
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => <MenuCard menu={item} />}

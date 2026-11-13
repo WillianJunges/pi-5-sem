@@ -32,6 +32,8 @@ import { todayISODate } from '../../../../src/utils/date';
 import { getErrorMessage } from '../../../../src/utils/errors';
 import { formatCurrency, formatLongDate } from '../../../../src/utils/format';
 
+const DAYS = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+
 function Action({ label, danger, onPress }: { label: string; danger?: boolean; onPress(): void }) {
   return (
     <Pressable onPress={onPress} hitSlop={8}>
@@ -275,7 +277,8 @@ export default function MenuScreen() {
               {MENU_STATUS_LABEL[menu.status]}
             </Text>
           </View>
-          <Text style={styles.date}>{formatLongDate(menu.menuDate)}</Text>
+          <Text style={styles.date}>{menu.weekday != null ? `Modelo semanal · ${DAYS[menu.weekday]}` : formatLongDate(menu.menuDate)}</Text>
+          {menu.weekday != null ? <Text style={styles.notice}>Este modelo não abre a marmitaria sozinho. Prepare a cópia de hoje e aprove-a.</Text> : null}
           {menu.status === 'ACTIVE' && isToday ? (
             <Text style={styles.notice}>Este é o cardápio que os clientes estão vendo hoje.</Text>
           ) : null}
@@ -317,7 +320,14 @@ export default function MenuScreen() {
 
         {menu.status === 'DRAFT' ? (
           <View style={styles.section}>
-            <Button
+            {menu.weekday != null ? <Button
+              title="Preparar cardápio de hoje"
+              loading={busy}
+              onPress={() => run(async () => {
+                const prepared = await ownerService.menus.prepare(menu.id);
+                router.push(`/owner/menu/${prepared.id}`);
+              })}
+            /> : <Button
               title="Ativar cardápio"
               loading={busy}
               onPress={() =>
@@ -325,7 +335,7 @@ export default function MenuScreen() {
                   ownerService.menus.activate(menu.id),
                 )
               }
-            />
+            />}
             <Button title="Editar nome ou data" variant="outline" onPress={() => router.push(`/owner/menu-form?id=${menu.id}`)} />
             <Pressable
               onPress={() =>
@@ -344,7 +354,6 @@ export default function MenuScreen() {
 
         {menu.status === 'ACTIVE' ? (
           <View style={styles.section}>
-            <Button title="Editar nome ou data" variant="outline" onPress={() => router.push(`/owner/menu-form?id=${menu.id}`)} />
             <Button
               title="Encerrar cardápio"
               variant="outline"
