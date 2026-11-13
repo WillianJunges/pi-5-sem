@@ -43,9 +43,10 @@ export function mapUpdateScript(state: MapState): string {
 /** Ação vinda do botão "Centralizar" do app. */
 export const MAP_RECENTER_SCRIPT = 'window.recenter && window.recenter(); true;';
 
-// Leaflet 1.9.4 com SRI. Tiles da CARTO (dados do OpenStreetMap): o servidor padrão do OSM
-// bloqueia pedidos sem Referer, que é o caso de uma WebView com HTML local.
-export const MAP_HTML = `<!DOCTYPE html>
+// A chave de mapas é pública no aplicativo; configure-a no ambiente do Expo.
+export function createMapHtml(apiKey: string): string {
+  const encodedKey = encodeURIComponent(apiKey);
+  return `<!DOCTYPE html>
 <html><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
@@ -68,7 +69,7 @@ export const MAP_HTML = `<!DOCTYPE html>
   if (!window.L) { send({ type: 'error' }); }
   else {
     var map = L.map('map', { zoomControl: false, attributionControl: true }).setView([-23.0858, -47.2025], 14);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=${encodedKey}', {
       maxZoom: 19, subdomains: 'abcd',
       attribution: '&copy; OpenStreetMap &copy; CARTO'
     }).addTo(map);
@@ -110,3 +111,6 @@ export const MAP_HTML = `<!DOCTYPE html>
   }
 </script>
 </body></html>`;
+}
+
+export const MAP_HTML = createMapHtml(process.env.EXPO_PUBLIC_CARTO_API_KEY ?? '');

@@ -167,6 +167,13 @@ describe('Sincronização e conflitos', () => {
     await worker.sync.activate(); worker.advance(600_000); await worker.sync.sync(true); worker.sync.deactivate();
     expect((await store.pending('a'))[0].status).toBe('conflict'); expect(remote.complete).toHaveBeenCalledTimes(1);
   });
+  it('mostra o motivo informado pelo servidor em conflito de conclusão', async () => {
+    const { store } = storage(); await store.save('a', [delivery()]); await store.enqueue('a', 'd1', operation());
+    const remote = api(); remote.complete.mockRejectedValueOnce({ status: 409, message: 'Confira o relógio do aparelho.' });
+    const worker = service(store, remote);
+    await worker.sync.activate(); worker.sync.deactivate();
+    expect((await store.pending('a'))[0]).toMatchObject({ status: 'conflict', message: 'Confira o relógio do aparelho.' });
+  });
   it('perda de atribuição remove o endereço, mas preserva a pendência para revisão', async () => {
     const { store } = storage(); await store.save('a', [delivery()]); await store.enqueue('a', 'd1', operation());
     const remote = api(); remote.complete.mockRejectedValueOnce({ status: 404 }); const worker = service(store, remote);
