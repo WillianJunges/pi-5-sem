@@ -99,14 +99,18 @@ export class MenusService {
     throw new AppError('Este item não está disponível no cardápio de hoje', 409);
   }
 
-  async create(data: { name: string; menuDate: string }): Promise<Menu> {
+  async create(data: { name: string; menuDate: string; weekday?: number | null }): Promise<Menu> {
+    await this.ensureWeekdayAvailable(data.weekday);
     return this.menus.create(data);
   }
 
-  async update(id: string, data: { name: string; menuDate: string }): Promise<Menu> {
+  async update(id: string, data: { name: string; menuDate: string; weekday?: number | null }): Promise<Menu> {
     const menu = await this.find(id);
     this.ensureEditable(menu);
-    await this.menus.update(id, data);
+    if (menu.status === 'ACTIVE') throw new AppError('Encerre o cardápio antes de alterar seus dados', 409);
+    const updated = { ...data, weekday: data.weekday === undefined ? menu.weekday : data.weekday };
+    await this.ensureWeekdayAvailable(updated.weekday, id);
+    await this.menus.update(id, updated);
     await this.publishIfActive(menu);
     return this.find(id);
   }
@@ -161,6 +165,8 @@ export class MenusService {
   /** Publica o cardápio para os clientes. A procedure sp_activate_menu confere de novo, com bloqueio. */
   async activate(id: string): Promise<Menu> {
     const menu = await this.find(id);
+    if (menu.weekday != null) throw new AppError('Prepare o cardápio de hoje a partir do modelo semanal', 409);
+    if (menu.menuDate !== this.today()) throw new AppError('Só é possível ativar o cardápio no próprio dia', 409);
     if (menu.status !== 'DRAFT') {
       throw new AppError(`Só cardápios em rascunho podem ser ativados. Este está ${STATUS_LABEL[menu.status]}`, 409);
     }
@@ -171,7 +177,12 @@ export class MenusService {
       const names = unavailable.map((i) => `${i.productName} ${i.variantName}`).join(', ');
       throw new AppError(`Itens desativados no cardápio: ${names}. Retire-os ou reative-os`, 409);
     }
-    const active = await this.menus.findActive();
+    let active = await this.menus.findActive();
+    if (active && active.menuDate < this.today()) {
+      await this.menus.close(active.id);
+      await this.safely(() => this.snapshots.markClosed(active!.id));
+      active = await this.menus.findActive();
+    }
     if (active) {
       throw new AppError(`O cardápio "${active.name}" ainda está ativo. Encerre-o antes de ativar outro`, 409);
     }
@@ -179,6 +190,16 @@ export class MenusService {
     const activated = await this.find(id);
     await this.publishIfActive(activated);
     return activated;
+  }
+
+  async prepareWeekly(id: string): Promise<Menu> {
+    const template = await this.find(id);
+    if (template.weekday == null || template.status !== 'DRAFT') throw new AppError('Modelo semanal não encontrado', 404);
+    const today = this.today();
+    const weekday = new Date(`${today}T12:00:00Z`).getUTCDay();
+    if (template.weekday !== weekday) throw new AppError('Este modelo não corresponde ao dia de hoje', 409);
+    if (!this.menus.prepareWeekly) throw new AppError('Operação indisponível', 500);
+    return this.menus.prepareWeekly(id, today);
   }
 
   async close(id: string): Promise<Menu> {
@@ -221,6 +242,13 @@ export class MenusService {
 
   private ensureEditable(menu: Menu) {
     if (menu.status === 'CLOSED') throw new AppError('Cardápios encerrados não podem ser alterados', 409);
+  }
+
+  private async ensureWeekdayAvailable(weekday?: number | null, exceptId?: string) {
+    if (weekday == null) return;
+    if ((await this.menus.list()).some((menu) => menu.weekday === weekday && menu.id !== exceptId)) {
+      throw new AppError('Já existe um modelo para esse dia da semana. Edite o modelo existente.', 409);
+    }
   }
 
   private findItem(menu: Menu, itemId: string): MenuItem {

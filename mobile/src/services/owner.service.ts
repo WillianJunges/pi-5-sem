@@ -58,6 +58,7 @@ export interface MenuSummary {
   name: string;
   /** AAAA-MM-DD */
   menuDate: string;
+  weekday: number | null;
   status: MenuStatus;
   activatedAt: string | null;
   closedAt: string | null;
@@ -86,6 +87,7 @@ export interface MenuDetail extends MenuSummary {
 export interface MenuInput {
   name: string;
   menuDate: string;
+  weekday?: number | null;
 }
 
 // ---------- Faixas de taxa de entrega (item 7) ----------
@@ -215,6 +217,7 @@ export const ownerService = {
     update: (id: string, data: MenuInput) => api<MenuSummary>(`/owner/menus/${id}`, { method: 'PUT', body: data }),
     remove: (id: string) => api<void>(`/owner/menus/${id}`, { method: 'DELETE' }),
     activate: (id: string) => api<MenuSummary>(`/owner/menus/${id}/activate`, { method: 'POST' }),
+    prepare: (id: string) => api<MenuSummary>(`/owner/menus/${id}/prepare`, { method: 'POST' }),
     close: (id: string) => api<MenuSummary>(`/owner/menus/${id}/close`, { method: 'POST' }),
     addItem: (id: string, variantId: string, specialPrice: number | null) =>
       api<unknown>(`/owner/menus/${id}/items`, { method: 'POST', body: { variantId, specialPrice } }),

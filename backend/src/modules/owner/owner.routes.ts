@@ -32,6 +32,7 @@ ownerRoutes.get('/menus/:id', menusController.get);
 ownerRoutes.put('/menus/:id', menusController.update);
 ownerRoutes.delete('/menus/:id', menusController.remove);
 ownerRoutes.post('/menus/:id/activate', menusController.activate);
+ownerRoutes.post('/menus/:id/prepare', menusController.prepareWeekly);
 ownerRoutes.post('/menus/:id/close', menusController.close);
 ownerRoutes.post('/menus/:id/items', menusController.addItem);
 ownerRoutes.patch('/menus/:id/items/:itemId', menusController.setSpecialPrice);

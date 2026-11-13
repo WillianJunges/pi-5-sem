@@ -202,6 +202,21 @@ describe('cardápio do dia: da proprietária ao cliente', () => {
     expect((await request(app).delete(`/owner/menus/${m.body.id}`).set(owner)).status).toBe(409);
   });
 
+  it('prepara e aprova uma cópia do modelo semanal', async () => {
+    const date = todayISODate();
+    const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
+    const p = await createFrango();
+    const template = await request(app).post('/owner/menus').set(owner).send({ name: 'Modelo semanal', menuDate: date, weekday }).expect(201);
+    await request(app).post(`/owner/menus/${template.body.id}/items`).set(owner).send({ variantId: p.variants[0].id, specialPrice: 19.9 }).expect(201);
+    await request(app).post(`/owner/menus/${template.body.id}/activate`).set(owner).expect(409);
+    const prepared = await request(app).post(`/owner/menus/${template.body.id}/prepare`).set(owner).expect(201);
+    expect(prepared.body).toMatchObject({ weekday: null, status: 'DRAFT', menuDate: date, itemCount: 1 });
+    await request(app).get('/menus/today').expect(404);
+    await request(app).post(`/owner/menus/${prepared.body.id}/activate`).set(owner).expect(200);
+    expect((await request(app).get('/menus/today')).body.menuId).toBe(prepared.body.id);
+    expect((await request(app).get(`/owner/menus/${template.body.id}`).set(owner)).body.status).toBe('DRAFT');
+  });
+
   it('só um ativo por vez (a procedure confere com bloqueio)', async () => {
     const p = await createFrango();
     const mk = async (name: string) => {

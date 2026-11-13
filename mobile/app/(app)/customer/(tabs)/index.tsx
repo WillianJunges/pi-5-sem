@@ -132,7 +132,7 @@ export default function MenuScreen() {
           menu?.status === 'CLOSED' ? (
             <EmptyState icon="🔒" title="Pedidos encerrados" message="O cardápio de hoje já foi fechado. Volte amanhã!" />
           ) : (
-            <EmptyState icon="🍱" title="Sem cardápio hoje" message="O cardápio ainda não foi publicado. Puxe para atualizar." />
+            <EmptyState icon="🍱" title="Marmitaria fechada no momento" message="Não há cardápio disponível agora. Puxe para atualizar." />
           )
         }
       />

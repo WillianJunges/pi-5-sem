@@ -7,6 +7,7 @@ const isoDate = z.iso.date('Data deve estar no formato AAAA-MM-DD');
 export const menuSchema = z.object({
   name: z.string().trim().min(2, 'Informe o nome do cardápio').max(120),
   menuDate: isoDate,
+  weekday: z.number().int().min(0).max(6).nullable().optional(),
 });
 
 export const listQuerySchema = z.object({ status: z.enum(MENU_STATUSES).optional() });
@@ -27,6 +28,7 @@ export function presentMenu(m: Menu) {
     id: m.id,
     name: m.name,
     menuDate: m.menuDate,
+    weekday: m.weekday ?? null,
     status: m.status,
     activatedAt: m.activatedAt,
     closedAt: m.closedAt,

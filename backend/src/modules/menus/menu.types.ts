@@ -13,6 +13,8 @@ export interface Menu {
   name: string;
   /** AAAA-MM-DD */
   menuDate: string;
+  /** Modelo semanal, de domingo (0) a sábado (6); null para cardápio por data. */
+  weekday?: number | null;
   status: MenuStatus;
   activatedAt: Date | null;
   closedAt: Date | null;
