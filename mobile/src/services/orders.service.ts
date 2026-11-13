@@ -83,6 +83,9 @@ export interface Order {
     district: string;
     city: string;
     state: string;
+    /** Coordenadas gravadas no pedido; o mapa da entrega usa como destino. */
+    latitude: number;
+    longitude: number;
   } | null;
   /** null na retirada no local. */
   distanceMeters: number | null;

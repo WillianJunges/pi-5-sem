@@ -417,10 +417,17 @@ Order → Delivery das transições, impedindo gravar GPS depois de concluir.
 No pedido do cliente, durante OUT_FOR_DELIVERY, o painel recebe atualizações
 automaticamente, mostra horário e precisão, identifica posição sem atualização
 recente e permite abrir a última coordenada em mapa externo. O hook
-`useDeliveryTracking` fornece a posição para a integração do mapa interno do
-Willian, responsabilidade indicada na especificação. Este protótipo não acrescenta
-mapa nativo interno nem cálculo de rotas. REST inicial, reconexão e consulta de
-recuperação a cada 15s funcionam apenas com a tela em foco e app ativo.
+`useDeliveryTracking` fornece a posição para o **mapa interno do cliente** (ponto 8b,
+Willian): `DeliveryMap` desenha o motoboy (cinza quando a posição está velha), o círculo
+de precisão e o endereço do pedido, com a distância em linha reta. O mapa é Leaflet +
+OpenStreetMap (tiles da CARTO) dentro de `react-native-webview`, sem chave do Google;
+a página carrega uma vez e cada posição entra por `injectJavaScript`
+(`src/features/tracking/mapHtml.ts`). Precisa de internet no celular do cliente e, por ser
+módulo nativo novo, de um APK gerado depois desta mudança. Não há cálculo de rota.
+Para testar sem sair de moto: com a entrega em andamento, `npm run sim:route -- <email> <senha>`
+(no backend) envia 24 posições, uma a cada 5 s, da marmitaria até o cliente.
+REST inicial, reconexão e consulta de recuperação a cada 15s funcionam apenas com a tela
+em foco e app ativo.
 
 ### Preparação e limites do teste
 
