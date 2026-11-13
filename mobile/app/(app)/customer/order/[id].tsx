@@ -200,7 +200,7 @@ export default function OrderScreen() {
         ) : null}
 
         <StatusTimeline order={order} />
-        {order.fulfillment === 'DELIVERY' && order.status === 'OUT_FOR_DELIVERY' ? <CustomerTrackingCard key={order.id} orderId={order.id} /> : null}
+        {order.fulfillment === 'DELIVERY' && order.status === 'OUT_FOR_DELIVERY' ? <CustomerTrackingCard key={order.id} orderId={order.id} destination={order.address} /> : null}
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Itens</Text>
