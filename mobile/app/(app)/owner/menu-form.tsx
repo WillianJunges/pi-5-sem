@@ -9,7 +9,7 @@ import { todayISODate } from '../../../src/utils/date';
 import { getErrorMessage } from '../../../src/utils/errors';
 import { formatLongDate } from '../../../src/utils/format';
 
-const DAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+const DAYS = ['Domingo', 'Segunda-Feira', 'Terça-Feira', 'Quarta-Feira', 'Quinta-Feira', 'Sexta-Feira', 'Sábado'];
 
 /** Confere se "AAAA-MM-DD" é uma data que existe (ex.: recusa 2026-02-30). */
 function isValidDate(text: string): boolean {
@@ -24,11 +24,12 @@ function isValidDate(text: string): boolean {
  * Depois de criar, abre o cardápio para adicionar os itens.
  */
 export default function MenuFormScreen() {
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, copyId } = useLocalSearchParams<{ id?: string; copyId?: string }>();
   const navigation = useNavigation();
   const editing = !!id;
 
   const [name, setName] = useState('');
+  const [nameEdited, setNameEdited] = useState(false);
   const [menuDate, setMenuDate] = useState(todayISODate());
   const [weekday, setWeekday] = useState<number | null>(null);
   const [loading, setLoading] = useState(editing);
@@ -36,8 +37,8 @@ export default function MenuFormScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    navigation.setOptions({ title: editing ? 'Editar cardápio' : 'Novo cardápio' });
-  }, [navigation, editing]);
+    navigation.setOptions({ title: editing ? 'Editar cardápio' : copyId ? 'Duplicar cardápio' : 'Novo cardápio' });
+  }, [navigation, editing, copyId]);
 
   useEffect(() => {
     if (!id) return;
@@ -64,7 +65,7 @@ export default function MenuFormScreen() {
         await ownerService.menus.update(id, data);
         router.back();
       } else {
-        const menu = await ownerService.menus.create(data);
+        const menu = copyId ? await ownerService.menus.duplicate(copyId, data) : await ownerService.menus.create(data);
         router.replace(`/owner/menu/${menu.id}`);
       }
     } catch (err) {
@@ -90,13 +91,13 @@ export default function MenuFormScreen() {
           label="Nome"
           placeholder="Ex.: Cardápio de segunda"
           value={name}
-          onChangeText={setName}
+          onChangeText={value => { setName(value); setNameEdited(true); }}
           maxLength={120}
         />
         <Text>Tipo de cardápio</Text>
         <View style={styles.choices}>
-          <Pressable onPress={() => setWeekday(null)}><Text style={weekday === null ? styles.selected : styles.choice}>Especial por data</Text></Pressable>
-          {DAYS.map((day, i) => <Pressable key={day} onPress={() => setWeekday(i)}><Text style={weekday === i ? styles.selected : styles.choice}>{day}</Text></Pressable>)}
+          <Pressable onPress={() => { setWeekday(null); if (!nameEdited && !editing) setName('Cardápio especial'); }}><Text style={weekday === null ? styles.selected : styles.choice}>Especial por data</Text></Pressable>
+          {DAYS.map((day, i) => <Pressable key={day} onPress={() => { setWeekday(i); if (!nameEdited && !editing) setName(`Cardápio de ${day}`); }}><Text style={weekday === i ? styles.selected : styles.choice}>{day}</Text></Pressable>)}
         </View>
         {weekday === null ? <View style={styles.dateField}>
           <TextField
@@ -112,7 +113,7 @@ export default function MenuFormScreen() {
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <Button title={editing ? 'Salvar' : 'Criar e adicionar itens'} onPress={handleSave} loading={saving} />
+        <Button title={editing ? 'Salvar' : copyId ? 'Duplicar e editar itens' : 'Criar e adicionar itens'} onPress={handleSave} loading={saving} />
       </ScrollView>
     </KeyboardAvoidingView>
   );

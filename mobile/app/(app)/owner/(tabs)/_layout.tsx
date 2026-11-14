@@ -38,10 +38,10 @@ export default function OwnerTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="fees"
+        name="reports"
         options={{
-          title: 'Taxas',
-          tabBarIcon: ({ focused }) => <TabIcon icon="🛵" focused={focused} />,
+          title: 'Relatórios',
+          tabBarIcon: ({ focused }) => <TabIcon icon="📊" focused={focused} />,
         }}
       />
       <Tabs.Screen

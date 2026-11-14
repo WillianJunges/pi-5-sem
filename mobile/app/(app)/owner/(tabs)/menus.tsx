@@ -13,6 +13,7 @@ import {
 import { colors, spacing } from '../../../../src/theme';
 import { getErrorMessage } from '../../../../src/utils/errors';
 import { formatLongDate } from '../../../../src/utils/format';
+import { businessHoursService } from '../../../../src/services/businessHours.service';
 
 const SECTIONS: { status: MenuStatus; title: string }[] = [
   { status: 'ACTIVE', title: 'Ativo' },
@@ -47,10 +48,14 @@ export default function MenusScreen() {
   const [menus, setMenus] = useState<MenuSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [view, setView] = useState<'daily' | 'weekly'>('daily');
+  const [todayWeekday, setTodayWeekday] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     try {
-      setMenus(await ownerService.menus.list());
+      const [list, hours] = await Promise.all([ownerService.menus.list(), businessHoursService.public().catch(() => null)]);
+      setMenus(list);
+      setTodayWeekday(hours?.todayWeekday ?? null);
       setError(null);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -100,15 +105,23 @@ export default function MenusScreen() {
     data: menus.filter((m) => m.status === s.status && m.weekday == null).sort((a, b) => b.menuDate.localeCompare(a.menuDate)),
   })).filter((s) => s.data.length > 0);
   const templates = menus.filter((m) => m.weekday != null).sort((a, b) => a.weekday! - b.weekday!);
-  if (templates.length) sections.unshift({ title: 'Modelos semanais', data: templates });
-  const today = new Date().getDay();
+  const visibleSections = view === 'weekly' ? [{ title: 'Cardápio semanal', data: templates }] : sections;
+  const today = todayWeekday ?? new Date().getDay();
   const todayTemplate = templates.find((m) => m.weekday === today);
 
   return (
     <View style={styles.container}>
       <SectionList
-        sections={sections}
-        ListHeaderComponent={todayTemplate ? <Pressable style={styles.card} onPress={() => router.push(`/owner/menu/${todayTemplate.id}`)}><Text style={styles.name}>Modelo de hoje: {todayTemplate.name}</Text><Text style={styles.muted}>Toque para preparar e aprovar o cardápio.</Text></Pressable> : <Text style={styles.muted}>Sem modelo semanal para hoje. Você pode criar um cardápio especial.</Text>}
+        sections={visibleSections}
+        ListHeaderComponent={<View style={styles.tabs}>
+          <View style={styles.tabRow}>
+            <Pressable onPress={() => setView('daily')} style={[styles.tab, view === 'daily' && styles.tabSelected]}><Text style={view === 'daily' ? styles.tabSelectedText : styles.tabText}>Do dia e especiais</Text></Pressable>
+            <Pressable onPress={() => setView('weekly')} style={[styles.tab, view === 'weekly' && styles.tabSelected]}><Text style={view === 'weekly' ? styles.tabSelectedText : styles.tabText}>Cardápio semanal</Text></Pressable>
+          </View>
+          <Text style={styles.muted}>{view === 'weekly' ? 'Monte um modelo para cada dia da semana.' : todayTemplate ? 'O modelo semanal de hoje aparece abaixo. Revise e ative o escolhido.' : 'Sem modelo semanal para hoje. Você pode criar um cardápio especial.'}</Text>
+          {view === 'daily' && todayTemplate ? <Pressable style={styles.card} onPress={() => router.push(`/owner/menu/${todayTemplate.id}`)}><Text style={styles.name}>Semanal de hoje: {todayTemplate.name}</Text><Text style={styles.muted}>Toque para revisar ou ativar.</Text></Pressable> : null}
+        </View>}
+        ListEmptyComponent={<Text style={styles.muted}>Nenhum cardápio nesta seção.</Text>}
         keyExtractor={(m) => m.id}
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => <MenuCard menu={item} />}
@@ -140,5 +153,11 @@ const styles = StyleSheet.create({
   },
   date: { fontSize: 14, color: colors.text, textTransform: 'capitalize' },
   muted: { fontSize: 13, color: colors.muted },
+  tabs: { gap: spacing.sm },
+  tabRow: { flexDirection: 'row', gap: spacing.sm },
+  tab: { flex: 1, padding: spacing.sm, backgroundColor: colors.surface, borderRadius: 8, alignItems: 'center' },
+  tabSelected: { backgroundColor: colors.primary },
+  tabText: { color: colors.text, fontWeight: '600' },
+  tabSelectedText: { color: '#fff', fontWeight: '600' },
   footer: { padding: spacing.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
 });

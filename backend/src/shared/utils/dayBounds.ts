@@ -19,3 +19,11 @@ export function dayBounds(date: string): { from: Date; until: Date } {
   const next = new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
   return { from: start(date), until: start(next) };
 }
+
+/** Semana começa na segunda-feira; os períodos terminam no dia informado. */
+export function periodDates(date: string, period: 'day' | 'week' | 'month'): { startDate: string; endDate: string } {
+  const day = new Date(`${date}T12:00:00Z`);
+  if (period === 'week') day.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7));
+  if (period === 'month') day.setUTCDate(1);
+  return { startDate: day.toISOString().slice(0, 10), endDate: date };
+}

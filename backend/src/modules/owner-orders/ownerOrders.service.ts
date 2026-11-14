@@ -35,9 +35,9 @@ export class OwnerOrdersService {
     return { orders: rows.slice(0, filter.limit), hasMore: rows.length > filter.limit };
   }
 
-  async dashboard() {
+  async dashboard(period: 'day' | 'week' | 'month' = 'day') {
     if (!this.orders.dashboard) throw new AppError('Painel indisponível', 500);
-    return this.orders.dashboard();
+    return this.orders.dashboard(period);
   }
 
   async get(id: string): Promise<OwnerOrder> {

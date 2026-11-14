@@ -22,6 +22,7 @@ export default function OwnerLayout() {
       <Stack.Screen name="couriers" options={{ title: 'Motoboys' }} />
       <Stack.Screen name="courier-form" options={{ title: 'Motoboy' }} />
       <Stack.Screen name="fee-form" options={{ title: 'Faixa de taxa' }} />
+      <Stack.Screen name="fees" options={{ title: 'Taxas de entrega' }} />
       <Stack.Screen name="business-hours" options={{ title: 'Horário de funcionamento' }} />
     </Stack>
   );

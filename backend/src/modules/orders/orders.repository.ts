@@ -2,6 +2,9 @@ import { randomUUID } from 'node:crypto';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import { db } from '../../config/database';
 import { translateDatabaseError } from '../../shared/errors/databaseErrors';
+import { AppError } from '../../shared/errors/AppError';
+import { todayISODate } from '../../shared/utils/date';
+import { isWithinBusinessHours } from '../owner/businessHours';
 import { centsToDecimal, decimalToCents } from '../../shared/utils/money';
 import type {
   CancelledBy,
@@ -149,6 +152,15 @@ export class MySqlOrdersRepository implements OrdersRepository {
     const conn = await db.getConnection();
     try {
       await conn.beginTransaction();
+      const now = new Date();
+      const date = todayISODate(now);
+      const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
+      const [menus] = await conn.query<RowDataPacket[]>("SELECT status, DATE_FORMAT(menu_date, '%Y-%m-%d') AS menuDate FROM menus WHERE id = ? FOR UPDATE", [order.menuId]);
+      const [hours] = await conn.query<RowDataPacket[]>("SELECT weekday, TIME_FORMAT(opens_at, '%H:%i') AS opensAt, TIME_FORMAT(closes_at, '%H:%i') AS closesAt FROM business_hours WHERE weekday = ? FOR SHARE", [weekday]);
+      const checkedAt = new Date();
+      if (!menus[0] || menus[0].status !== 'ACTIVE' || date !== todayISODate(checkedAt) || menus[0].menuDate !== date || !isWithinBusinessHours(hours as { weekday: number; opensAt: string | null; closesAt: string | null }[], checkedAt)) {
+        throw new AppError('A marmitaria não está recebendo pedidos agora.', 409);
+      }
       const a = order.address;
       await conn.query(
         `INSERT INTO orders

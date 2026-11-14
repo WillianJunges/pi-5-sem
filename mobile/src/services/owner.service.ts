@@ -218,7 +218,7 @@ export const ownerService = {
     remove: (id: string) => api<void>(`/owner/menus/${id}`, { method: 'DELETE' }),
     activate: (id: string) => api<MenuSummary>(`/owner/menus/${id}/activate`, { method: 'POST' }),
     prepare: (id: string) => api<MenuSummary>(`/owner/menus/${id}/prepare`, { method: 'POST' }),
-    duplicate: (id: string) => api<MenuSummary>(`/owner/menus/${id}/duplicate`, { method: 'POST' }),
+    duplicate: (id: string, data: MenuInput) => api<MenuSummary>(`/owner/menus/${id}/duplicate`, { method: 'POST', body: data }),
     close: (id: string) => api<MenuSummary>(`/owner/menus/${id}/close`, { method: 'POST' }),
     addItem: (id: string, variantId: string, specialPrice: number | null) =>
       api<unknown>(`/owner/menus/${id}/items`, { method: 'POST', body: { variantId, specialPrice } }),
@@ -229,11 +229,11 @@ export const ownerService = {
 
   orders: {
     /** active: true = em andamento; false = entregues e cancelados. */
-    list: (active: boolean, offset = 0, limit = 20, filters?: { search?: string; status?: OrderStatus; date?: string }) =>
+    list: (active: boolean | undefined, offset = 0, limit = 20, filters?: { search?: string; status?: OrderStatus; date?: string; from?: string; to?: string }) =>
       api<{ orders: OwnerOrderSummary[]; hasMore: boolean }>(
-        `/owner/orders?active=${active}&limit=${limit}&offset=${offset}${filters?.search ? `&search=${encodeURIComponent(filters.search)}` : ''}${filters?.status ? `&status=${filters.status}` : ''}${filters?.date ? `&date=${encodeURIComponent(filters.date)}` : ''}`,
+        `/owner/orders?${active === undefined ? '' : `active=${active}&`}limit=${limit}&offset=${offset}${filters?.search ? `&search=${encodeURIComponent(filters.search)}` : ''}${filters?.status ? `&status=${filters.status}` : ''}${filters?.date ? `&date=${encodeURIComponent(filters.date)}` : ''}${filters?.from ? `&from=${encodeURIComponent(filters.from)}` : ''}${filters?.to ? `&to=${encodeURIComponent(filters.to)}` : ''}`,
       ),
-    dashboard: () => api<{ date: string; orderCount: number; completedCount: number; sales: number; average: number }>('/owner/orders/dashboard'),
+    dashboard: (period: 'day' | 'week' | 'month' = 'day') => api<{ date: string; startDate: string; endDate: string; orderCount: number; completedCount: number; cancelledCount: number; sales: number; average: number }>(`/owner/orders/dashboard?period=${period}`),
     get: (id: string) => api<OwnerOrder>(`/owner/orders/${id}`),
     apply: (id: string, action: OwnerOrderAction, reason?: string) =>
       api<OwnerOrder>(`/owner/orders/${id}/${action}`, { method: 'POST', ...(action === 'cancel' ? { body: { reason } } : {}) }),

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCart } from '../contexts/CartContext';
 import { isOnSale, type MenuItem, type MenuVariation } from '../services/customerMenu.service';
 import { colors, spacing } from '../theme';
 import { formatCurrency } from '../utils/format';
 import { Button } from './Button';
+import { getErrorMessage } from '../utils/errors';
 import { QuantityStepper } from './QuantityStepper';
 
 interface AddToCartSheetProps {
@@ -49,6 +50,8 @@ export function AddToCartSheet({ item, menuDate, onClose }: AddToCartSheetProps)
         quantity,
       );
       onClose();
+    } catch (error) {
+      Alert.alert('Não foi possível adicionar', getErrorMessage(error));
     } finally {
       setSaving(false);
     }

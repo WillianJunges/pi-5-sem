@@ -7,6 +7,7 @@ import { useCart } from '../../../../src/contexts/CartContext';
 import type { CartItem } from '../../../../src/services/cartStorage';
 import { colors, spacing } from '../../../../src/theme';
 import { formatCurrency } from '../../../../src/utils/format';
+import { getErrorMessage } from '../../../../src/utils/errors';
 
 function CartRow({ item }: { item: CartItem }) {
   const { setQuantity, remove } = useCart();
@@ -20,7 +21,7 @@ function CartRow({ item }: { item: CartItem }) {
       <View style={styles.rowActions}>
         <Text style={styles.lineTotal}>{formatCurrency(item.unitPrice * item.quantity)}</Text>
         {/* min 0: tirar a última unidade remove o item */}
-        <QuantityStepper value={item.quantity} min={0} onChange={(q) => setQuantity(item.id, q)} />
+        <QuantityStepper value={item.quantity} min={0} onChange={(q) => { void setQuantity(item.id, q).catch(error => Alert.alert('Não foi possível alterar', getErrorMessage(error))); }} />
         <Pressable onPress={() => remove(item.id)} hitSlop={8}>
           <Text style={styles.remove}>Remover</Text>
         </Pressable>

@@ -6,6 +6,7 @@ import { productsService } from '../products/products.service';
 import type { Menu, MenuDetail, MenuItem, MenuItemDetail, MenuStatus, PublicMenu, PublicMenuProduct } from './menu.types';
 import { type MenuSnapshotsRepository, menuSnapshotsRepository } from './menuSnapshots.repository';
 import { type MenusRepository, menusRepository } from './menus.repository';
+import { isBusinessOpen } from '../owner/businessHours';
 
 const STATUS_LABEL: Record<MenuStatus, string> = { DRAFT: 'rascunho', ACTIVE: 'ativo', CLOSED: 'encerrado' };
 
@@ -57,10 +58,22 @@ export class MenusService {
     private readonly products: ProductsRepository,
     private readonly snapshots: MenuSnapshotsRepository,
     private readonly today: () => string = () => todayISODate(),
+    private readonly businessOpen: () => Promise<boolean> = async () => true,
   ) {}
 
-  list(status?: MenuStatus): Promise<Menu[]> {
+  async list(status?: MenuStatus): Promise<Menu[]> {
+    await this.syncDay();
     return this.menus.list(status);
+  }
+
+  async syncDay(): Promise<void> {
+    if (!this.menus.syncDay) return;
+    const date = this.today();
+    await this.menus.syncDay(date, new Date(`${date}T12:00:00Z`).getUTCDay());
+  }
+
+  async expirePreviousDays(): Promise<void> {
+    if (this.menus.expireBefore) await this.menus.expireBefore(this.today());
   }
 
   /** Cardápio com nomes e preços, para a tela da proprietária. */
@@ -74,15 +87,16 @@ export class MenusService {
    * Lê a cópia do MongoDB; se não houver, monta a partir do MySQL.
    */
   async getToday(): Promise<PublicMenu | null> {
+    await this.expirePreviousDays();
     const today = this.today();
+    const active = await this.menus.findActive();
+    if (!active || active.menuDate !== today || !(await this.businessOpen())) return null;
     try {
       const snapshot = await this.snapshots.findActiveByDate(today);
-      if (snapshot) return snapshot;
+      if (snapshot?.menuId === active.id) return snapshot;
     } catch (err) {
       console.warn('[menus] MongoDB indisponível, lendo do MySQL:', (err as Error).message);
     }
-    const active = await this.menus.findActive();
-    if (!active || active.menuDate !== today) return null;
     return toPublicMenu(active, await this.menus.itemDetails(active.id));
   }
 
@@ -92,7 +106,7 @@ export class MenusService {
    */
   async priceForOrder(variantId: string): Promise<number> {
     const active = await this.menus.findActive();
-    if (active && active.menuDate === this.today()) {
+    if (active && active.menuDate === this.today() && await this.businessOpen()) {
       const item = (await this.menus.itemDetails(active.id)).find((i) => i.variantId === variantId && i.available);
       if (item) return item.effectivePriceCents;
     }
@@ -198,14 +212,20 @@ export class MenusService {
     const today = this.today();
     const weekday = new Date(`${today}T12:00:00Z`).getUTCDay();
     if (template.weekday !== weekday) throw new AppError('Este modelo não corresponde ao dia de hoje', 409);
+    const items = await this.menus.itemDetails(id);
+    if (!items.length) throw new AppError('Adicione ao menos um item antes de ativar o cardápio', 409);
+    if (items.some(item => !item.available)) throw new AppError('O modelo contém itens desativados. Revise o cardápio antes de ativar.', 409);
+    const active = await this.menus.findActive();
+    if (active && active.menuDate === today) throw new AppError(`O cardápio "${active.name}" ainda está ativo. Encerre-o antes de ativar outro`, 409);
     if (!this.menus.prepareWeekly) throw new AppError('Operação indisponível', 500);
     return this.menus.prepareWeekly(id, today);
   }
 
-  async duplicate(id: string): Promise<Menu> {
+  async duplicate(id: string, data: { name: string; menuDate: string; weekday?: number | null }): Promise<Menu> {
     await this.find(id);
+    await this.ensureWeekdayAvailable(data.weekday);
     if (!this.menus.duplicate) throw new AppError('Operação indisponível', 500);
-    return this.menus.duplicate(id, this.today());
+    return this.menus.duplicate(id, data);
   }
 
   async close(id: string): Promise<Menu> {
@@ -264,7 +284,7 @@ export class MenusService {
   }
 }
 
-export const menusService = new MenusService(menusRepository, productsRepository, menuSnapshotsRepository);
+export const menusService = new MenusService(menusRepository, productsRepository, menuSnapshotsRepository, () => todayISODate(), isBusinessOpen);
 
 // Produto desativado, preço alterado etc. → o cardápio do dia do cliente reflete na hora.
 productsService.onChange(() => menusService.refreshActiveSnapshot());

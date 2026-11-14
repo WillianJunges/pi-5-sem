@@ -2,6 +2,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import { type CartItem, cartStorage, type NewCartItem } from '../services/cartStorage';
 import { todayISODate } from '../utils/date';
 import { useAuth } from './AuthContext';
+import { customerMenuService } from '../services/customerMenu.service';
 
 interface CartContextValue {
   items: CartItem[];
@@ -38,6 +39,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [reload]);
 
   const value = useMemo<CartContextValue>(() => {
+    async function requireAvailable(variantId: string, menuDate: string) {
+      const menu = await customerMenuService.getToday();
+      if (!menu || menu.date !== menuDate || !menu.items.some(item => item.variations.some(variation => variation.variantId === variantId))) {
+        throw new Error('A marmitaria está fechada ou este item não está disponível agora.');
+      }
+    }
     // toda alteração grava no SQLite primeiro e depois relê, para a tela sempre mostrar o que está salvo
     async function run(change: (uid: string) => Promise<void>) {
       if (!userId) return;
@@ -50,8 +57,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
       loading,
       count: items.reduce((sum, item) => sum + item.quantity, 0),
       subtotal: items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
-      add: (item, quantity) => run((uid) => cartStorage.add(uid, item, quantity)),
-      setQuantity: (id, quantity) => run((uid) => cartStorage.setQuantity(uid, id, quantity)),
+      add: async (item, quantity) => { await requireAvailable(item.variantId, item.menuDate); await run((uid) => cartStorage.add(uid, item, quantity)); },
+      setQuantity: async (id, quantity) => {
+        const current = items.find(item => item.id === id);
+        if (current && quantity > current.quantity) await requireAvailable(current.variantId, current.menuDate);
+        await run((uid) => cartStorage.setQuantity(uid, id, quantity));
+      },
       remove: (id) => run((uid) => cartStorage.setQuantity(uid, id, 0)),
       updatePrices: (prices) =>
         run(async (uid) => {

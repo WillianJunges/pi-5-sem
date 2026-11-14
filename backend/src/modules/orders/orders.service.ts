@@ -5,6 +5,7 @@ import { type DeliveryFeesService, deliveryFeesService } from '../delivery-fees/
 import { type Coordinates, geoService, STORE_LOCATION } from '../geo/geo.service';
 import type { MenuItemDetail } from '../menus/menu.types';
 import { menusRepository } from '../menus/menus.repository';
+import { isBusinessOpen } from '../owner/businessHours';
 import type { NewOrder, Order, OrderAddress, OrderQuote, OrderSummary } from './order.types';
 import { type OrdersRepository, ordersRepository } from './orders.repository';
 import {
@@ -27,6 +28,7 @@ export interface TodayMenu {
  * por item, e já traz os nomes que o pedido copia.
  */
 async function loadTodayMenu(): Promise<TodayMenu | null> {
+  if (!await isBusinessOpen()) return null;
   const active = await menusRepository.findActive();
   if (!active || active.menuDate !== todayISODate()) return null;
   return { menuId: active.id, items: await menusRepository.itemDetails(active.id) };

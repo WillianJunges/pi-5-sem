@@ -278,7 +278,7 @@ export default function MenuScreen() {
             </Text>
           </View>
           <Text style={styles.date}>{menu.weekday != null ? `Modelo semanal · ${DAYS[menu.weekday]}` : formatLongDate(menu.menuDate)}</Text>
-          {menu.weekday != null ? <Text style={styles.notice}>Este modelo não abre a marmitaria sozinho. Prepare a cópia de hoje e aprove-a.</Text> : null}
+          {menu.weekday != null ? <Text style={styles.notice}>O modelo de hoje aparece automaticamente. Ative-o para permitir pedidos dentro do horário.</Text> : null}
           {menu.status === 'ACTIVE' && isToday ? (
             <Text style={styles.notice}>Este é o cardápio que os clientes estão vendo hoje.</Text>
           ) : null}
@@ -321,10 +321,11 @@ export default function MenuScreen() {
         {menu.status === 'DRAFT' ? (
           <View style={styles.section}>
             {menu.weekday != null ? <Button
-              title="Preparar cardápio de hoje"
+              title="Ativar cardápio para hoje"
               loading={busy}
-              onPress={() => run(async () => {
+              onPress={() => confirm('Ativar cardápio de hoje?', 'O cliente poderá comprar somente no horário de funcionamento.', 'Ativar', async () => {
                 const prepared = await ownerService.menus.prepare(menu.id);
+                await ownerService.menus.activate(prepared.id);
                 router.push(`/owner/menu/${prepared.id}`);
               })}
             /> : <Button
@@ -374,10 +375,7 @@ export default function MenuScreen() {
         {menu.status === 'CLOSED' ? (
           <Text style={[styles.muted, styles.centerText]}>Cardápio encerrado: fica só para consulta.</Text>
         ) : null}
-        <Button title="Duplicar cardápio" variant="outline" loading={busy} onPress={() => run(async () => {
-          const copy = await ownerService.menus.duplicate(menu.id);
-          router.push(`/owner/menu/${copy.id}`);
-        })} />
+        <Button title="Duplicar cardápio" variant="outline" loading={busy} onPress={() => router.push(`/owner/menu-form?copyId=${menu.id}`)} />
       </ScrollView>
 
       <AddItemSheet

@@ -69,7 +69,9 @@ export default function MenuScreen() {
 
   const load = useCallback(async () => {
     try {
-      setMenu(await customerMenuService.getToday());
+      const current = await customerMenuService.getToday();
+      setMenu(current);
+      if (!current) setSelected(null);
       businessHoursService.public().then(hours => setTodayHours(hours.configured ? hours.days.find(day => day.weekday === hours.todayWeekday) ?? null : null)).catch(() => setTodayHours(null));
       setError(null);
     } catch (err) {
@@ -79,6 +81,8 @@ export default function MenuScreen() {
 
   useEffect(() => {
     load().finally(() => setLoading(false));
+    const timer = setInterval(() => { void load(); }, 30_000);
+    return () => clearInterval(timer);
   }, [load]);
 
   async function handleRefresh() {

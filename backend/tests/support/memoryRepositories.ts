@@ -134,6 +134,7 @@ export class MemoryProductsRepository implements ProductsRepository {
 }
 
 export class MemoryMenusRepository implements MenusRepository {
+  private readonly daily = new Map<string, string>();
   constructor(
     private readonly db: MemoryStore,
     private readonly now: () => Date = () => new Date(),
@@ -194,15 +195,24 @@ export class MemoryMenusRepository implements MenusRepository {
   }
 
   async prepareWeekly(id: string, date: string) {
+    const key = `${id}:${date}`;
+    const existing = this.daily.get(key);
+    if (existing) { const found = await this.findById(existing); if (found) return found; }
     const source = (await this.findById(id))!;
     const copy = await this.create({ name: source.name, menuDate: date });
     for (const item of source.items) await this.addItem(copy.id, item.variantId, item.specialPriceCents);
+    this.daily.set(key, copy.id);
     return (await this.findById(copy.id))!;
   }
 
-  async duplicate(id: string, date: string) {
+  async syncDay(date: string, weekday: number) {
+    for (const row of this.db.menus) if (row.status === 'ACTIVE' && row.menuDate < date) await this.close(row.id);
+    void weekday;
+  }
+
+  async duplicate(id: string, data: { name: string; menuDate: string; weekday?: number | null }) {
     const source = (await this.findById(id))!;
-    const copy = await this.create({ name: `Cópia de ${source.name}`.slice(0, 120), menuDate: date });
+    const copy = await this.create(data);
     for (const item of source.items) await this.addItem(copy.id, item.variantId, item.specialPriceCents);
     return (await this.findById(copy.id))!;
   }
