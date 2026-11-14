@@ -8,6 +8,8 @@ export const ownerOrdersQuerySchema = z.object({
     .optional()
     .transform((v) => (v === undefined ? undefined : v === 'true')),
   status: z.enum(ORDER_STATUSES, 'Status inválido').optional(),
+  search: z.string().trim().max(120).optional(),
+  date: z.iso.date().optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
   offset: z.coerce.number().int().min(0).default(0),
 });

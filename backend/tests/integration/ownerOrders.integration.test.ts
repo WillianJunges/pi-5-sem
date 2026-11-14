@@ -46,6 +46,7 @@ beforeAll(async () => {
   await admin.query(`DROP DATABASE IF EXISTS \`${DB}\``);
   await admin.query(`CREATE DATABASE \`${DB}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
   await admin.changeUser({ database: DB });
+  await admin.query("SET time_zone = '+00:00'");
   for (const file of (await readdir(SCHEMA_DIR)).filter((f) => f.endsWith('.sql')).sort()) {
     for (const statement of splitStatements(await readFile(path.join(SCHEMA_DIR, file), 'utf8'))) {
       await admin.query(statement);
@@ -134,6 +135,24 @@ const statusOf = async (id: string) => {
 };
 
 describe('Pedidos da proprietária (/owner/orders)', () => {
+  it('registra o motivo da proprietária e permite ao cliente consultá-lo', async () => {
+    const id = await createOrder();
+    const result = await request(app).post(`/owner/orders/${id}/cancel`).set(owner).send({ reason: 'Produto indisponível' }).expect(200);
+    expect(result.body).toMatchObject({ status: 'CANCELLED', cancellationReason: 'Produto indisponível', cancelledBy: 'OWNER' });
+    const clientView = await request(app).get(`/orders/${id}`).set(customer).expect(200);
+    expect(clientView.body.cancellationReason).toBe('Produto indisponível');
+  });
+
+  it('busca pelo cliente e calcula o painel de pedidos concluídos', async () => {
+    await createOrder('PENDING');
+    await createOrder('DELIVERED');
+    await createOrder('CANCELLED');
+    const filtered = await request(app).get(`/owner/orders?search=Ana&status=PENDING&date=${todayISODate()}`).set(owner).expect(200);
+    expect(filtered.body.orders).toHaveLength(1);
+    expect(filtered.body.orders[0].customer.name).toBe('Ana Cliente');
+    const dashboard = await request(app).get('/owner/orders/dashboard').set(owner).expect(200);
+    expect(dashboard.body).toMatchObject({ orderCount: 3, completedCount: 1, sales: 50, average: 50 });
+  });
   it('lista os pedidos com o resumo e o nome da cliente', async () => {
     await createOrder();
     const res = await request(app).get('/owner/orders?active=true').set(owner);

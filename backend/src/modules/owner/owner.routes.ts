@@ -5,6 +5,7 @@ import { deliveryFeesController } from '../delivery-fees/deliveryFees.controller
 import { menusController } from '../menus/menus.controller';
 import { ownerOrdersController } from '../owner-orders/ownerOrders.controller';
 import { productsController } from '../products/products.controller';
+import { ownerBusinessHoursRoutes } from './businessHours';
 
 /**
  * Rotas administrativas da Proprietária (Lucas).
@@ -12,6 +13,7 @@ import { productsController } from '../products/products.controller';
  */
 export const ownerRoutes = Router();
 ownerRoutes.use('/deliveries', ownerDeliveriesRoutes);
+ownerRoutes.use('/business-hours', ownerBusinessHoursRoutes);
 
 // Produtos e variações (escopo, seção 7)
 ownerRoutes.get('/products', productsController.list);
@@ -33,6 +35,7 @@ ownerRoutes.put('/menus/:id', menusController.update);
 ownerRoutes.delete('/menus/:id', menusController.remove);
 ownerRoutes.post('/menus/:id/activate', menusController.activate);
 ownerRoutes.post('/menus/:id/prepare', menusController.prepareWeekly);
+ownerRoutes.post('/menus/:id/duplicate', menusController.duplicate);
 ownerRoutes.post('/menus/:id/close', menusController.close);
 ownerRoutes.post('/menus/:id/items', menusController.addItem);
 ownerRoutes.patch('/menus/:id/items/:itemId', menusController.setSpecialPrice);
@@ -47,6 +50,7 @@ ownerRoutes.delete('/delivery-fees/:id', deliveryFeesController.remove);
 
 // Administração de pedidos (escopo, seção 11)
 ownerRoutes.get('/orders', ownerOrdersController.list);
+ownerRoutes.get('/orders/dashboard', ownerOrdersController.dashboard);
 ownerRoutes.get('/orders/:id', ownerOrdersController.get);
 ownerRoutes.post('/orders/:id/confirm', ownerOrdersController.confirm);
 ownerRoutes.post('/orders/:id/prepare', ownerOrdersController.prepare);

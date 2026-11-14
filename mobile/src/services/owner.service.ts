@@ -218,6 +218,7 @@ export const ownerService = {
     remove: (id: string) => api<void>(`/owner/menus/${id}`, { method: 'DELETE' }),
     activate: (id: string) => api<MenuSummary>(`/owner/menus/${id}/activate`, { method: 'POST' }),
     prepare: (id: string) => api<MenuSummary>(`/owner/menus/${id}/prepare`, { method: 'POST' }),
+    duplicate: (id: string) => api<MenuSummary>(`/owner/menus/${id}/duplicate`, { method: 'POST' }),
     close: (id: string) => api<MenuSummary>(`/owner/menus/${id}/close`, { method: 'POST' }),
     addItem: (id: string, variantId: string, specialPrice: number | null) =>
       api<unknown>(`/owner/menus/${id}/items`, { method: 'POST', body: { variantId, specialPrice } }),
@@ -228,13 +229,14 @@ export const ownerService = {
 
   orders: {
     /** active: true = em andamento; false = entregues e cancelados. */
-    list: (active: boolean, offset = 0, limit = 20) =>
+    list: (active: boolean, offset = 0, limit = 20, filters?: { search?: string; status?: OrderStatus; date?: string }) =>
       api<{ orders: OwnerOrderSummary[]; hasMore: boolean }>(
-        `/owner/orders?active=${active}&limit=${limit}&offset=${offset}`,
+        `/owner/orders?active=${active}&limit=${limit}&offset=${offset}${filters?.search ? `&search=${encodeURIComponent(filters.search)}` : ''}${filters?.status ? `&status=${filters.status}` : ''}${filters?.date ? `&date=${encodeURIComponent(filters.date)}` : ''}`,
       ),
+    dashboard: () => api<{ date: string; orderCount: number; completedCount: number; sales: number; average: number }>('/owner/orders/dashboard'),
     get: (id: string) => api<OwnerOrder>(`/owner/orders/${id}`),
-    apply: (id: string, action: OwnerOrderAction) =>
-      api<OwnerOrder>(`/owner/orders/${id}/${action}`, { method: 'POST' }),
+    apply: (id: string, action: OwnerOrderAction, reason?: string) =>
+      api<OwnerOrder>(`/owner/orders/${id}/${action}`, { method: 'POST', ...(action === 'cancel' ? { body: { reason } } : {}) }),
   },
 
   couriers: {

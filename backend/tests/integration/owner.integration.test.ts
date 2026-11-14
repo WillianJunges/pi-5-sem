@@ -94,6 +94,34 @@ async function createFrango() {
 }
 
 describe('acesso (login real do módulo base)', () => {
+  it('duplica cardápio com itens e preço especial em rascunho', async () => {
+    const product = await createFrango();
+    const source = await request(app).post('/owner/menus').set(owner).send({ name: 'Original', menuDate: todayISODate() }).expect(201);
+    await request(app).post(`/owner/menus/${source.body.id}/items`).set(owner).send({ variantId: product.variants[0].id, specialPrice: 19.9 }).expect(201);
+    const copy = await request(app).post(`/owner/menus/${source.body.id}/duplicate`).set(owner).expect(201);
+    expect(copy.body).toMatchObject({ name: 'Cópia de Original', status: 'DRAFT', weekday: null, itemCount: 1 });
+    const detail = await request(app).get(`/owner/menus/${copy.body.id}`).set(owner).expect(200);
+    expect(detail.body.items[0]).toMatchObject({ variantId: product.variants[0].id, specialPrice: 19.9 });
+  });
+  it('salva horário como proprietária e disponibiliza para o cliente', async () => {
+    const days = Array.from({ length: 7 }, (_, weekday) => ({ weekday, opensAt: weekday === 1 ? '11:00' : null, closesAt: weekday === 1 ? '14:00' : null }));
+    await request(app).put('/owner/business-hours').set(customer).send({ days }).expect(403);
+    await request(app).put('/owner/business-hours').set(owner).send({ days }).expect(200);
+    const result = await request(app).get('/business-hours').expect(200);
+    expect(result.body.configured).toBe(true);
+    expect(result.body.days[1]).toMatchObject({ opensAt: '11:00', closesAt: '14:00' });
+  });
+  it('impede uma segunda proprietária mesmo via alteração de perfil', async () => {
+    await admin.beginTransaction();
+    try {
+      await admin.query("INSERT INTO users (id, name, email, password_hash, role) VALUES (UUID(), 'Teste', 'limite-owner@teste.com', 'hash', 'CUSTOMER')");
+      await expect(admin.query("UPDATE users SET role = 'OWNER' WHERE email = 'limite-owner@teste.com'")).rejects.toMatchObject({ code: 'ER_DUP_ENTRY' });
+      await expect(admin.query("INSERT INTO users (id, name, email, password_hash, role) VALUES (UUID(), 'Outra', 'outra-owner@teste.com', 'hash', 'OWNER')")).rejects.toMatchObject({ code: 'ER_DUP_ENTRY' });
+    } finally {
+      await admin.rollback();
+    }
+  });
+
   it('sem token: 401; cliente: 403; proprietária: 200', async () => {
     expect((await request(app).get('/owner/products')).status).toBe(401);
     expect((await request(app).get('/owner/products').set(customer)).status).toBe(403);

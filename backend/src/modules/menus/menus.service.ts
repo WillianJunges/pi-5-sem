@@ -202,6 +202,12 @@ export class MenusService {
     return this.menus.prepareWeekly(id, today);
   }
 
+  async duplicate(id: string): Promise<Menu> {
+    await this.find(id);
+    if (!this.menus.duplicate) throw new AppError('Operação indisponível', 500);
+    return this.menus.duplicate(id, this.today());
+  }
+
   async close(id: string): Promise<Menu> {
     const menu = await this.find(id);
     if (menu.status !== 'ACTIVE') {

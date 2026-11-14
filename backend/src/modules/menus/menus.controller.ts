@@ -42,6 +42,10 @@ export const menusController = {
     res.status(201).json(presentMenu(await menusService.prepareWeekly(idParam(req))));
   },
 
+  async duplicate(req: Request, res: Response) {
+    res.status(201).json(presentMenu(await menusService.duplicate(idParam(req))));
+  },
+
   async close(req: Request, res: Response) {
     res.json(presentMenu(await menusService.close(idParam(req))));
   },

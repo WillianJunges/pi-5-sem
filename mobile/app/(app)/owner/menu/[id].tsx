@@ -374,6 +374,10 @@ export default function MenuScreen() {
         {menu.status === 'CLOSED' ? (
           <Text style={[styles.muted, styles.centerText]}>Cardápio encerrado: fica só para consulta.</Text>
         ) : null}
+        <Button title="Duplicar cardápio" variant="outline" loading={busy} onPress={() => run(async () => {
+          const copy = await ownerService.menus.duplicate(menu.id);
+          router.push(`/owner/menu/${copy.id}`);
+        })} />
       </ScrollView>
 
       <AddItemSheet

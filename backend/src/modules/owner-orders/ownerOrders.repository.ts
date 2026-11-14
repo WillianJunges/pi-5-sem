@@ -1,6 +1,9 @@
 import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import { db } from '../../config/database';
 import { translateDatabaseError } from '../../shared/errors/databaseErrors';
+import { dayBounds } from '../../shared/utils/dayBounds';
+import { todayISODate } from '../../shared/utils/date';
+import { decimalToCents, fromCents } from '../../shared/utils/money';
 import type { OrderStatus } from '../orders/order.types';
 import { mapSummary, ordersRepository } from '../orders/orders.repository';
 import type { OrderCustomer, OwnerOrder, OwnerOrderSummary } from './ownerOrders.types';
@@ -9,6 +12,8 @@ export interface OwnerOrdersFilter {
   /** true = em andamento; false = entregues e cancelados; undefined = todos. */
   active?: boolean;
   status?: OrderStatus;
+  search?: string;
+  date?: string;
   limit: number;
   offset: number;
 }
@@ -23,7 +28,8 @@ export interface OwnerOrdersRepository {
    * abertas mudem o mesmo pedido ao mesmo tempo). Devolve false se nada mudou.
    * O trigger trg_orders_before_update (script 019) confere o fluxo e grava o horário.
    */
-  updateStatus(id: string, from: OrderStatus[], to: OrderStatus): Promise<boolean>;
+  updateStatus(id: string, from: OrderStatus[], to: OrderStatus, reason?: string | null): Promise<boolean>;
+  dashboard?(): Promise<{ date: string; orderCount: number; completedCount: number; sales: number; average: number }>;
 }
 
 interface CustomerRow extends RowDataPacket {
@@ -35,7 +41,7 @@ interface CustomerRow extends RowDataPacket {
 const toCustomer = (row: CustomerRow): OrderCustomer => ({ name: row.customer_name, phone: row.customer_phone });
 
 export class MySqlOwnerOrdersRepository implements OwnerOrdersRepository {
-  async list({ active, status, limit, offset }: OwnerOrdersFilter): Promise<OwnerOrderSummary[]> {
+  async list({ active, status, search, date, limit, offset }: OwnerOrdersFilter): Promise<OwnerOrderSummary[]> {
     const where: string[] = [];
     const params: unknown[] = [];
     if (active !== undefined) {
@@ -45,6 +51,15 @@ export class MySqlOwnerOrdersRepository implements OwnerOrdersRepository {
     if (status) {
       where.push('v.status = ?');
       params.push(status);
+    }
+    if (search) {
+      where.push('(u.name LIKE ? OR v.id LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`);
+    }
+    if (date) {
+      const { from, until } = dayBounds(date);
+      where.push('v.created_at >= ? AND v.created_at < ?');
+      params.push(from, until);
     }
     // vw_customer_orders (script 020, módulo do Cliente) já traz o resumo dos itens
     const [rows] = await db.query<CustomerRow[]>(
@@ -62,6 +77,18 @@ export class MySqlOwnerOrdersRepository implements OwnerOrdersRepository {
     }));
   }
 
+  async dashboard() {
+    const date = todayISODate();
+    const { from, until } = dayBounds(date);
+    const [rows] = await db.query<RowDataPacket[]>(`SELECT COUNT(*) AS order_count,
+      SUM(CASE WHEN status = 'DELIVERED' THEN 1 ELSE 0 END) AS completed_count,
+      COALESCE(SUM(CASE WHEN status = 'DELIVERED' THEN total ELSE 0 END), 0) AS sales
+      FROM orders WHERE created_at >= ? AND created_at < ?`, [from, until]);
+    const completedCount = Number(rows[0].completed_count ?? 0);
+    const salesCents = decimalToCents(String(rows[0].sales));
+    return { date, orderCount: Number(rows[0].order_count), completedCount, sales: fromCents(salesCents), average: fromCents(completedCount ? Math.round(salesCents / completedCount) : 0) };
+  }
+
   async findById(id: string): Promise<OwnerOrder | null> {
     const [rows] = await db.query<CustomerRow[]>(
       `SELECT o.customer_id, u.name AS customer_name, u.phone AS customer_phone
@@ -75,11 +102,11 @@ export class MySqlOwnerOrdersRepository implements OwnerOrdersRepository {
     return order ? { ...order, customer: toCustomer(rows[0]) } : null;
   }
 
-  async updateStatus(id: string, from: OrderStatus[], to: OrderStatus): Promise<boolean> {
+  async updateStatus(id: string, from: OrderStatus[], to: OrderStatus, reason?: string | null): Promise<boolean> {
     try {
       const [result] = await db.query<ResultSetHeader>(
-        `UPDATE orders SET status = ? WHERE id = ? AND status IN (${from.map(() => '?').join(', ')})`,
-        [to, id, ...from],
+        `UPDATE orders SET status = ?, cancellation_reason = CASE WHEN ? = 'CANCELLED' THEN ? ELSE cancellation_reason END WHERE id = ? AND status IN (${from.map(() => '?').join(', ')})`,
+        [to, to, reason ?? null, id, ...from],
       );
       return result.affectedRows > 0;
     } catch (err) {

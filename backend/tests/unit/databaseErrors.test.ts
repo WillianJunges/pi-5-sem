@@ -26,3 +26,16 @@ describe('banco indisponível', () => {
     expect(translateDatabaseError(refused)).toBe(refused);
   });
 });
+
+describe('limite de proprietária', () => {
+  it('traduz a violação do índice de proprietária em conflito compreensível', () => {
+    const error = translateDatabaseError({ errno: 1062, sqlMessage: "Duplicate entry '1' for key 'users.uq_users_single_owner'" });
+    expect(error).toBeInstanceOf(AppError);
+    expect(error).toMatchObject({ statusCode: 409, message: 'Já existe uma conta de proprietária no sistema.' });
+  });
+
+  it('mantém a mensagem genérica para outras duplicidades', () => {
+    const error = translateDatabaseError({ errno: 1062, sqlMessage: "Duplicate entry 'a' for key 'users.uq_users_email'" });
+    expect(error).toMatchObject({ statusCode: 409, message: 'Registro duplicado' });
+  });
+});

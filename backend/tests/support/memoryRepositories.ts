@@ -200,6 +200,13 @@ export class MemoryMenusRepository implements MenusRepository {
     return (await this.findById(copy.id))!;
   }
 
+  async duplicate(id: string, date: string) {
+    const source = (await this.findById(id))!;
+    const copy = await this.create({ name: `Cópia de ${source.name}`.slice(0, 120), menuDate: date });
+    for (const item of source.items) await this.addItem(copy.id, item.variantId, item.specialPriceCents);
+    return (await this.findById(copy.id))!;
+  }
+
   async activate(id: string) {
     const row = this.db.menus.find((m) => m.id === id)!;
     row.status = 'ACTIVE';
