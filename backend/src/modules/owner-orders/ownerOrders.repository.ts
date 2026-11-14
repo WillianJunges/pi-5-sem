@@ -1,7 +1,7 @@
 import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import { db } from '../../config/database';
 import { translateDatabaseError } from '../../shared/errors/databaseErrors';
-import { dayBounds } from '../../shared/utils/dayBounds';
+import { dayBounds, periodDates } from '../../shared/utils/dayBounds';
 import { todayISODate } from '../../shared/utils/date';
 import { decimalToCents, fromCents } from '../../shared/utils/money';
 import type { OrderStatus } from '../orders/order.types';
@@ -14,6 +14,8 @@ export interface OwnerOrdersFilter {
   status?: OrderStatus;
   search?: string;
   date?: string;
+  from?: string;
+  to?: string;
   limit: number;
   offset: number;
 }
@@ -29,7 +31,7 @@ export interface OwnerOrdersRepository {
    * O trigger trg_orders_before_update (script 019) confere o fluxo e grava o horário.
    */
   updateStatus(id: string, from: OrderStatus[], to: OrderStatus, reason?: string | null): Promise<boolean>;
-  dashboard?(): Promise<{ date: string; orderCount: number; completedCount: number; sales: number; average: number }>;
+  dashboard?(period?: 'day' | 'week' | 'month'): Promise<{ date: string; startDate: string; endDate: string; orderCount: number; completedCount: number; cancelledCount: number; sales: number; average: number }>;
 }
 
 interface CustomerRow extends RowDataPacket {
@@ -41,7 +43,7 @@ interface CustomerRow extends RowDataPacket {
 const toCustomer = (row: CustomerRow): OrderCustomer => ({ name: row.customer_name, phone: row.customer_phone });
 
 export class MySqlOwnerOrdersRepository implements OwnerOrdersRepository {
-  async list({ active, status, search, date, limit, offset }: OwnerOrdersFilter): Promise<OwnerOrderSummary[]> {
+  async list({ active, status, search, date, from: fromDate, to: toDate, limit, offset }: OwnerOrdersFilter): Promise<OwnerOrderSummary[]> {
     const where: string[] = [];
     const params: unknown[] = [];
     if (active !== undefined) {
@@ -61,6 +63,8 @@ export class MySqlOwnerOrdersRepository implements OwnerOrdersRepository {
       where.push('v.created_at >= ? AND v.created_at < ?');
       params.push(from, until);
     }
+    if (fromDate) { where.push('v.created_at >= ?'); params.push(dayBounds(fromDate).from); }
+    if (toDate) { where.push('v.created_at < ?'); params.push(dayBounds(toDate).until); }
     // vw_customer_orders (script 020, módulo do Cliente) já traz o resumo dos itens
     const [rows] = await db.query<CustomerRow[]>(
       `SELECT v.*, u.name AS customer_name, u.phone AS customer_phone
@@ -77,16 +81,19 @@ export class MySqlOwnerOrdersRepository implements OwnerOrdersRepository {
     }));
   }
 
-  async dashboard() {
+  async dashboard(period: 'day' | 'week' | 'month' = 'day') {
     const date = todayISODate();
-    const { from, until } = dayBounds(date);
+    const { startDate } = periodDates(date, period);
+    const from = dayBounds(startDate).from;
+    const until = dayBounds(date).until;
     const [rows] = await db.query<RowDataPacket[]>(`SELECT COUNT(*) AS order_count,
       SUM(CASE WHEN status = 'DELIVERED' THEN 1 ELSE 0 END) AS completed_count,
+      SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) AS cancelled_count,
       COALESCE(SUM(CASE WHEN status = 'DELIVERED' THEN total ELSE 0 END), 0) AS sales
       FROM orders WHERE created_at >= ? AND created_at < ?`, [from, until]);
     const completedCount = Number(rows[0].completed_count ?? 0);
     const salesCents = decimalToCents(String(rows[0].sales));
-    return { date, orderCount: Number(rows[0].order_count), completedCount, sales: fromCents(salesCents), average: fromCents(completedCount ? Math.round(salesCents / completedCount) : 0) };
+    return { date, startDate, endDate: date, orderCount: Number(rows[0].order_count), completedCount, cancelledCount: Number(rows[0].cancelled_count ?? 0), sales: fromCents(salesCents), average: fromCents(completedCount ? Math.round(salesCents / completedCount) : 0) };
   }
 
   async findById(id: string): Promise<OwnerOrder | null> {

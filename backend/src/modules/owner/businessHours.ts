@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { RowDataPacket } from 'mysql2/promise';
 import { z } from 'zod';
 import { db } from '../../config/database';
-import { todayISODate } from '../../shared/utils/date';
+import { APP_TIMEZONE, todayISODate } from '../../shared/utils/date';
 
 const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 const daySchema = z.object({ weekday: z.number().int().min(0).max(6), opensAt: time.nullable(), closesAt: time.nullable() })
@@ -17,6 +17,19 @@ export async function getBusinessHours() {
   });
   const todayWeekday = new Date(`${todayISODate()}T12:00:00Z`).getUTCDay();
   return { configured: rows.length === 7, todayWeekday, days };
+}
+
+export function isWithinBusinessHours(days: { weekday: number; opensAt: string | null; closesAt: string | null }[], now = new Date()): boolean {
+  const date = todayISODate(now);
+  const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
+  const clock = new Intl.DateTimeFormat('en-GB', { timeZone: APP_TIMEZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(now);
+  const day = days.find(item => item.weekday === weekday);
+  return !!day?.opensAt && !!day.closesAt && clock >= day.opensAt && clock < day.closesAt;
+}
+
+export async function isBusinessOpen(now = new Date()): Promise<boolean> {
+  const schedule = await getBusinessHours();
+  return schedule.configured && isWithinBusinessHours(schedule.days, now);
 }
 
 export const businessHoursRoutes = Router();

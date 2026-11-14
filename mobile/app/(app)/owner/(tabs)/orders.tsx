@@ -80,7 +80,6 @@ export default function OwnerOrdersScreen() {
   const [date, setDate] = useState('');
   const [status, setStatus] = useState<OrderStatus | undefined>();
   const [applied, setApplied] = useState<{ search?: string; date?: string; status?: OrderStatus }>({});
-  const [dashboard, setDashboard] = useState<Awaited<ReturnType<typeof ownerService.orders.dashboard>> | null>(null);
 
   const load = useCallback(async (filter: boolean) => {
     try {
@@ -88,7 +87,6 @@ export default function OwnerOrdersScreen() {
       setOrders(page.orders);
       setHasMore(page.hasMore);
       setError(null);
-      ownerService.orders.dashboard().then(setDashboard).catch(() => setDashboard(null));
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -180,13 +178,9 @@ export default function OwnerOrdersScreen() {
 
   return (
     <View style={styles.container}>
-      {dashboard ? <View style={styles.dashboard}><Text style={styles.customer}>Resumo de hoje</Text>
-        <Text style={styles.items}>{dashboard.orderCount} pedidos · {dashboard.completedCount} entregues ou retirados</Text>
-        <Text style={styles.items}>Vendas dos pedidos de hoje já concluídos: {formatCurrency(dashboard.sales)} · Ticket médio: {formatCurrency(dashboard.average)}</Text>
-      </View> : null}
       <View style={styles.searchBox}>
-        <TextInput style={styles.input} placeholder="Buscar cliente ou número do pedido" value={search} onChangeText={setSearch} />
-        <TextInput style={styles.input} placeholder="Data: AAAA-MM-DD (opcional)" value={date} onChangeText={setDate} maxLength={10} />
+        <TextInput style={styles.input} placeholderTextColor={colors.muted} placeholder="Buscar cliente ou número do pedido" value={search} onChangeText={setSearch} />
+        <TextInput style={styles.input} placeholderTextColor={colors.muted} placeholder="Data: AAAA-MM-DD (opcional)" value={date} onChangeText={setDate} maxLength={10} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false}><View style={styles.filters}>
           {STATUS_FILTERS.map(option => <Pressable key={option.label} onPress={() => setStatus(option.value)} style={[styles.filter, status === option.value && styles.filterSelected]}><Text style={[styles.filterText, status === option.value && styles.filterTextSelected]}>{option.label}</Text></Pressable>)}
         </View></ScrollView>
@@ -204,7 +198,6 @@ export default function OwnerOrdersScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  dashboard: { backgroundColor: colors.surface, padding: spacing.md, gap: spacing.xs },
   searchBox: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, gap: spacing.xs },
   input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: spacing.sm, color: colors.text },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },

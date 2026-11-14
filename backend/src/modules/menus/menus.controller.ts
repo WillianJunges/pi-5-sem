@@ -43,7 +43,7 @@ export const menusController = {
   },
 
   async duplicate(req: Request, res: Response) {
-    res.status(201).json(presentMenu(await menusService.duplicate(idParam(req))));
+    res.status(201).json(presentMenu(await menusService.duplicate(idParam(req), menuSchema.parse(req.body))));
   },
 
   async close(req: Request, res: Response) {

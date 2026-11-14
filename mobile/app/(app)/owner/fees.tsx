@@ -11,13 +11,13 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Button } from '../../../../src/components/Button';
-import { EmptyState } from '../../../../src/components/EmptyState';
-import { TextField } from '../../../../src/components/TextField';
-import { type FeeQuote, type FeeRange, formatKm, ownerService, parseDecimal } from '../../../../src/services/owner.service';
-import { colors, spacing } from '../../../../src/theme';
-import { getErrorMessage } from '../../../../src/utils/errors';
-import { formatCurrency } from '../../../../src/utils/format';
+import { Button } from '../../../src/components/Button';
+import { EmptyState } from '../../../src/components/EmptyState';
+import { TextField } from '../../../src/components/TextField';
+import { type FeeQuote, type FeeRange, formatKm, ownerService, parseDecimal } from '../../../src/services/owner.service';
+import { colors, spacing } from '../../../src/theme';
+import { getErrorMessage } from '../../../src/utils/errors';
+import { formatCurrency } from '../../../src/utils/format';
 
 /** Simula a taxa para uma distância (GET /owner/delivery-fees/quote). */
 function QuoteBox() {

@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { idParam } from '../../shared/utils/params';
 import { toOrderResponse, toSummaryResponse } from '../orders/orders.controller';
 import { cancelOrderSchema } from '../orders/orders.schemas';
-import { ownerOrdersQuerySchema } from './ownerOrders.schemas';
+import { ownerOrdersQuerySchema, reportQuerySchema } from './ownerOrders.schemas';
 import { ownerOrdersService } from './ownerOrders.service';
 import type { OwnerAction, OwnerOrder } from './ownerOrders.types';
 
@@ -14,8 +14,9 @@ const action = (name: OwnerAction) => async (req: Request, res: Response) => {
 };
 
 export const ownerOrdersController = {
-  async dashboard(_req: Request, res: Response) {
-    res.json(await ownerOrdersService.dashboard());
+  async dashboard(req: Request, res: Response) {
+    const { period } = reportQuerySchema.parse(req.query);
+    res.json(await ownerOrdersService.dashboard(period));
   },
   /** GET /owner/orders — pedidos de todos os clientes, mais novos primeiro. */
   async list(req: Request, res: Response) {

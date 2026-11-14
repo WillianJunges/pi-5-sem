@@ -62,6 +62,10 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+  await admin.query('DELETE FROM business_hours');
+  for (let weekday = 0; weekday < 7; weekday++) {
+    await admin.query("INSERT INTO business_hours (weekday, opens_at, closes_at) VALUES (?, '00:00', '23:59')", [weekday]);
+  }
   await admin.query('SET FOREIGN_KEY_CHECKS = 0');
   // menus antes de menu_items: assim o trigger de cardápio encerrado não barra a limpeza
   for (const t of ['menus', 'menu_items', 'product_variants', 'products', 'delivery_fee_ranges']) {
@@ -98,8 +102,8 @@ describe('acesso (login real do módulo base)', () => {
     const product = await createFrango();
     const source = await request(app).post('/owner/menus').set(owner).send({ name: 'Original', menuDate: todayISODate() }).expect(201);
     await request(app).post(`/owner/menus/${source.body.id}/items`).set(owner).send({ variantId: product.variants[0].id, specialPrice: 19.9 }).expect(201);
-    const copy = await request(app).post(`/owner/menus/${source.body.id}/duplicate`).set(owner).expect(201);
-    expect(copy.body).toMatchObject({ name: 'Cópia de Original', status: 'DRAFT', weekday: null, itemCount: 1 });
+    const copy = await request(app).post(`/owner/menus/${source.body.id}/duplicate`).set(owner).send({ name: 'Cardápio de Segunda-Feira', menuDate: todayISODate(), weekday: 1 }).expect(201);
+    expect(copy.body).toMatchObject({ name: 'Cardápio de Segunda-Feira', status: 'DRAFT', weekday: 1, itemCount: 1 });
     const detail = await request(app).get(`/owner/menus/${copy.body.id}`).set(owner).expect(200);
     expect(detail.body.items[0]).toMatchObject({ variantId: product.variants[0].id, specialPrice: 19.9 });
   });

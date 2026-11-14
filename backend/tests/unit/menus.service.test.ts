@@ -60,11 +60,37 @@ describe('Cardápios', () => {
   }
 
   describe('montagem', () => {
+    it('não cria cópia diária quando o modelo está vazio', async () => {
+      const template = await menus.create({ name: 'Quinta', menuDate: TODAY, weekday: 4 });
+      await expectAppError(menus.prepareWeekly(template.id), 409, /ao menos um item/);
+      expect((await menus.list()).filter(menu => menu.weekday == null)).toHaveLength(0);
+    });
+    it('seleciona o modelo diário sem duplicar e encerra o anterior na virada', async () => {
+      const template = await menus.create({ name: 'Quinta', menuDate: TODAY, weekday: 4 });
+      await menus.addItem(template.id, media().id, null);
+      expect((await menus.list()).find(menu => menu.weekday === 4)?.id).toBe(template.id);
+      const first = await menus.prepareWeekly(template.id);
+      expect(first).toMatchObject({ menuDate: TODAY, status: 'DRAFT' });
+      expect((await menus.list()).filter(menu => menu.weekday == null)).toHaveLength(1);
+      await menus.activate(first.id);
+      today = '2026-10-16';
+      await menus.list();
+      expect((await menus.get(first.id)).status).toBe('CLOSED');
+      expect(await menus.getToday()).toBeNull();
+    });
+
+    it('não mostra o cardápio ativo fora do horário de funcionamento', async () => {
+      const m = await draftWithItems();
+      await menus.activate(m.id);
+      const closed = new MenusService(new MemoryMenusRepository(db), new MemoryProductsRepository(db), snapshots, () => today, async () => false);
+      expect(await closed.getToday()).toBeNull();
+      await expectAppError(closed.priceForOrder(media().id), 409);
+    });
     it('duplica itens e preços em rascunho independente, sem publicar', async () => {
       const source = await draftWithItems();
       await menus.activate(source.id);
-      const copy = await menus.duplicate(source.id);
-      expect(copy).toMatchObject({ name: 'Cópia de Cardápio de quinta', status: 'DRAFT', menuDate: TODAY });
+      const copy = await menus.duplicate(source.id, { name: 'Cardápio de Sexta-Feira', menuDate: TODAY, weekday: 5 });
+      expect(copy).toMatchObject({ name: 'Cardápio de Sexta-Feira', weekday: 5, status: 'DRAFT', menuDate: TODAY });
       expect(copy.items).toHaveLength(3);
       expect(copy.items[0]).toMatchObject({ variantId: media().id, specialPriceCents: 1990 });
       await menus.removeItem(copy.id, copy.items[0].id);

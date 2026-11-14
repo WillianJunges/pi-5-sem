@@ -15,7 +15,9 @@ export interface MenusRepository {
   create(data: { name: string; menuDate: string; weekday?: number | null }): Promise<Menu>;
   update(id: string, data: { name: string; menuDate: string; weekday?: number | null }): Promise<void>;
   prepareWeekly?(id: string, date: string): Promise<Menu>;
-  duplicate?(id: string, date: string): Promise<Menu>;
+  duplicate?(id: string, data: { name: string; menuDate: string; weekday?: number | null }): Promise<Menu>;
+  syncDay?(date: string, weekday: number): Promise<void>;
+  expireBefore?(date: string): Promise<void>;
   /** DRAFT → ACTIVE com as consistências e o bloqueio da procedure sp_activate_menu. */
   activate(id: string): Promise<void>;
   close(id: string): Promise<void>;
@@ -154,7 +156,9 @@ export class MySqlMenusRepository implements MenusRepository {
       const [rows] = await conn.query<MenuRow[]>('SELECT * FROM menus WHERE id = ? FOR UPDATE', [id]);
       const template = rows[0];
       if (!template || template.weekday == null || template.status !== 'DRAFT') throw new Error('Modelo semanal não encontrado');
-      await conn.query('INSERT INTO menus (id, name, menu_date) VALUES (?, ?, ?)', [copyId, template.name, date]);
+      const [existing] = await conn.query<MenuRow[]>('SELECT * FROM menus WHERE source_weekly_id = ? AND menu_date = ?', [id, date]);
+      if (existing[0]) { await conn.commit(); return (await this.findById(existing[0].id))!; }
+      await conn.query('INSERT INTO menus (id, name, menu_date, source_weekly_id) VALUES (?, ?, ?, ?)', [copyId, template.name, date, id]);
       const [items] = await conn.query<ItemRow[]>('SELECT * FROM menu_items WHERE menu_id = ?', [id]);
       for (const item of items) {
         await conn.query('INSERT INTO menu_items (id, menu_id, variant_id, special_price) VALUES (?, ?, ?, ?)', [randomUUID(), copyId, item.variant_id, item.special_price]);
@@ -169,18 +173,28 @@ export class MySqlMenusRepository implements MenusRepository {
     return (await this.findById(copyId))!;
   }
 
-  async duplicate(id: string, date: string): Promise<Menu> {
+  async expireBefore(date: string): Promise<void> {
+    await db.query("UPDATE menus SET status = 'CLOSED', closed_at = UTC_TIMESTAMP() WHERE status = 'ACTIVE' AND menu_date < ?", [date]);
+  }
+
+  async syncDay(date: string, weekday: number): Promise<void> {
+    await this.expireBefore(date);
+    // O modelo é exibido diretamente na lista; só criamos a cópia quando escolhido.
+    void weekday;
+  }
+
+  async duplicate(id: string, data: { name: string; menuDate: string; weekday?: number | null }): Promise<Menu> {
     const conn = await db.getConnection();
     const copyId = randomUUID();
     try {
       await conn.beginTransaction();
       const [rows] = await conn.query<MenuRow[]>('SELECT * FROM menus WHERE id = ? FOR UPDATE', [id]);
       if (!rows[0]) throw new AppError('Cardápio não encontrado', 404);
-      await conn.query('INSERT INTO menus (id, name, menu_date) VALUES (?, ?, ?)', [copyId, `Cópia de ${rows[0].name}`.slice(0, 120), date]);
+      await conn.query('INSERT INTO menus (id, name, menu_date, weekday) VALUES (?, ?, ?, ?)', [copyId, data.name, data.menuDate, data.weekday ?? null]);
       const [items] = await conn.query<ItemRow[]>('SELECT * FROM menu_items WHERE menu_id = ?', [id]);
       for (const item of items) await conn.query('INSERT INTO menu_items (id, menu_id, variant_id, special_price) VALUES (?, ?, ?, ?)', [randomUUID(), copyId, item.variant_id, item.special_price]);
       await conn.commit();
-    } catch (err) { await conn.rollback(); throw err; }
+    } catch (err) { await conn.rollback(); if ((err as { code?: string }).code === 'ER_DUP_ENTRY') throw new AppError('Já existe um modelo para esse dia da semana.', 409); throw err; }
     finally { conn.release(); }
     return (await this.findById(copyId))!;
   }

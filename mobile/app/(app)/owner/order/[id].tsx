@@ -49,6 +49,7 @@ export default function OwnerOrderScreen() {
   const [busy, setBusy] = useState(false);
   const [delivery, setDelivery] = useState<Delivery | null>(null);
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
+  const [deliveryLoading, setDeliveryLoading] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -73,15 +74,18 @@ export default function OwnerOrderScreen() {
   const loadDelivery = useCallback(async () => {
     if (!hasDelivery) {
       setDelivery(null);
+      setDeliveryLoading(false);
+      setDeliveryError(null);
       return;
     }
+    setDeliveryLoading(true);
     try {
       setDelivery(await ownerService.deliveries.forOrder(id));
       setDeliveryError(null);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 404) setDelivery(null);
+      if (err instanceof ApiError && err.status === 404) { setDelivery(null); setDeliveryError(null); }
       else setDeliveryError(getErrorMessage(err));
-    }
+    } finally { setDeliveryLoading(false); }
   }, [id, hasDelivery]);
 
   useEffect(() => {
@@ -216,9 +220,9 @@ export default function OwnerOrderScreen() {
                 <Text style={styles.retry}>Tentar de novo</Text>
               </Pressable>
             </>
-          ) : (
+          ) : deliveryLoading ? (
             <ActivityIndicator color={colors.primary} />
-          )}
+          ) : <Text style={styles.muted}>Nenhuma entrega foi criada para este pedido.</Text>}
         </View>
       ) : null}
 
