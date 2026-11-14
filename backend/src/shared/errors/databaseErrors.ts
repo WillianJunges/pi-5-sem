@@ -25,7 +25,9 @@ export function translateDatabaseError(err: unknown): unknown {
   if (!status) return err;
   // Duplicidade vinda de índice UNIQUE traz mensagem técnica; a da procedure já é amigável.
   const message =
-    dbError.errno === 1062 && dbError.sqlMessage?.startsWith('Duplicate') ? 'Registro duplicado' : dbError.sqlMessage;
+    dbError.errno === 1062 && dbError.sqlMessage?.includes('uq_users_single_owner')
+      ? 'Já existe uma conta de proprietária no sistema.'
+      : dbError.errno === 1062 && dbError.sqlMessage?.startsWith('Duplicate') ? 'Registro duplicado' : dbError.sqlMessage;
   return new AppError(message ?? 'Erro no banco de dados', status);
 }
 

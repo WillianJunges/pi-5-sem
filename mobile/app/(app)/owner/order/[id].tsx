@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Button } from '../../../../src/components/Button';
 import { EmptyState } from '../../../../src/components/EmptyState';
 import { DELIVERY_LABELS } from '../../../../src/features/courier/presentation';
@@ -33,6 +33,7 @@ function Row({ label, value, bold }: { label: string; value: string; bold?: bool
 }
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+const CANCEL_REASONS = ['Produto indisponível', 'Marmitaria fechada', 'Não podemos realizar a entrega', 'Outro'];
 
 /**
  * Pedido para a proprietária (item 5): itens, cliente, entrega, pagamento e as ações
@@ -50,6 +51,9 @@ export default function OwnerOrderScreen() {
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [assigning, setAssigning] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [otherReason, setOtherReason] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -90,10 +94,10 @@ export default function OwnerOrderScreen() {
     setRefreshing(false);
   }
 
-  async function apply(action: OwnerOrderAction) {
+  async function apply(action: OwnerOrderAction, reason?: string) {
     setBusy(true);
     try {
-      setOrder(await ownerService.orders.apply(id, action));
+      setOrder(await ownerService.orders.apply(id, action, reason));
     } catch (err) {
       Alert.alert('Ops', getErrorMessage(err));
       await load(); // mostra o status atual
@@ -129,10 +133,9 @@ export default function OwnerOrderScreen() {
   }
 
   function confirmCancel() {
-    Alert.alert('Cancelar pedido?', 'O cliente verá o pedido como cancelado. Isso não pode ser desfeito.', [
-      { text: 'Voltar', style: 'cancel' },
-      { text: 'Cancelar pedido', style: 'destructive', onPress: () => apply('cancel') },
-    ]);
+    setCancelReason('');
+    setOtherReason('');
+    setCancelOpen(true);
   }
 
   if (!order) {
@@ -281,6 +284,24 @@ export default function OwnerOrderScreen() {
         onPick={pickCourier}
         onClose={() => setPickerOpen(false)}
       />
+      <Modal visible={cancelOpen} transparent animationType="slide" onRequestClose={() => setCancelOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.cardTitle}>Por que cancelar o pedido?</Text>
+            <Text style={styles.muted}>O cliente verá o motivo. O cancelamento não pode ser desfeito.</Text>
+            {CANCEL_REASONS.map(reason => <Pressable key={reason} onPress={() => setCancelReason(reason)} style={styles.reasonOption}>
+              <Text style={styles.text}>{cancelReason === reason ? '◉' : '○'} {reason}</Text>
+            </Pressable>)}
+            {cancelReason === 'Outro' ? <TextInput style={styles.reasonInput} placeholder="Descreva o motivo" value={otherReason} onChangeText={setOtherReason} maxLength={200} multiline /> : null}
+            <Button title="Confirmar cancelamento" disabled={!cancelReason || (cancelReason === 'Outro' && !otherReason.trim()) || busy} onPress={() => {
+              const reason = cancelReason === 'Outro' ? otherReason.trim() : cancelReason;
+              setCancelOpen(false);
+              void apply('cancel', reason);
+            }} />
+            <Button title="Voltar" variant="outline" onPress={() => setCancelOpen(false)} />
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -315,4 +336,8 @@ const styles = StyleSheet.create({
   error: { fontSize: 14, color: colors.danger },
   retry: { fontSize: 15, fontWeight: '600', color: colors.primary },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: spacing.xs },
+  modalBackdrop: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: spacing.md },
+  modalCard: { backgroundColor: colors.background, borderRadius: 12, padding: spacing.md, gap: spacing.sm },
+  reasonOption: { paddingVertical: spacing.sm },
+  reasonInput: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: spacing.sm, color: colors.text },
 });

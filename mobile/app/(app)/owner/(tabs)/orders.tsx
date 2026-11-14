@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Button } from '../../../../src/components/Button';
 import { EmptyState } from '../../../../src/components/EmptyState';
 import { type OrderStatus, orderStatusLabel } from '../../../../src/services/orders.service';
@@ -61,6 +61,12 @@ const FILTERS = [
   { active: true, label: 'Em andamento' },
   { active: false, label: 'Finalizados' },
 ];
+const STATUS_FILTERS: { value: OrderStatus | undefined; label: string }[] = [
+  { value: undefined, label: 'Todos' }, { value: 'PENDING', label: 'Aguardando' },
+  { value: 'CONFIRMED', label: 'Confirmado' }, { value: 'PREPARING', label: 'Preparo' },
+  { value: 'READY', label: 'Pronto' }, { value: 'OUT_FOR_DELIVERY', label: 'Em entrega' },
+  { value: 'DELIVERED', label: 'Entregue' }, { value: 'CANCELLED', label: 'Cancelado' },
+];
 
 /** Aba "Pedidos" (item 5): pedidos em andamento e finalizados de todos os clientes. */
 export default function OwnerOrdersScreen() {
@@ -70,17 +76,23 @@ export default function OwnerOrdersScreen() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [search, setSearch] = useState('');
+  const [date, setDate] = useState('');
+  const [status, setStatus] = useState<OrderStatus | undefined>();
+  const [applied, setApplied] = useState<{ search?: string; date?: string; status?: OrderStatus }>({});
+  const [dashboard, setDashboard] = useState<Awaited<ReturnType<typeof ownerService.orders.dashboard>> | null>(null);
 
   const load = useCallback(async (filter: boolean) => {
     try {
-      const page = await ownerService.orders.list(filter);
+      const page = await ownerService.orders.list(filter, 0, 20, applied);
       setOrders(page.orders);
       setHasMore(page.hasMore);
       setError(null);
+      ownerService.orders.dashboard().then(setDashboard).catch(() => setDashboard(null));
     } catch (err) {
       setError(getErrorMessage(err));
     }
-  }, []);
+  }, [applied]);
 
   // recarrega ao voltar para a aba (ex.: depois de confirmar um pedido)
   useFocusEffect(
@@ -92,6 +104,7 @@ export default function OwnerOrdersScreen() {
   function changeFilter(filter: boolean) {
     if (filter === active) return;
     setActive(filter);
+    if (applied.status) { setStatus(undefined); setApplied(current => ({ ...current, status: undefined })); }
     setOrders(null);
   }
 
@@ -105,7 +118,7 @@ export default function OwnerOrdersScreen() {
     if (!orders || !hasMore || loadingMore) return;
     setLoadingMore(true);
     try {
-      const page = await ownerService.orders.list(active, orders.length);
+      const page = await ownerService.orders.list(active, orders.length, 20, applied);
       setOrders((current) => {
         const ids = new Set(current?.map((o) => o.id));
         return [...(current ?? []), ...page.orders.filter((o) => !ids.has(o.id))];
@@ -167,6 +180,22 @@ export default function OwnerOrdersScreen() {
 
   return (
     <View style={styles.container}>
+      {dashboard ? <View style={styles.dashboard}><Text style={styles.customer}>Resumo de hoje</Text>
+        <Text style={styles.items}>{dashboard.orderCount} pedidos · {dashboard.completedCount} entregues ou retirados</Text>
+        <Text style={styles.items}>Vendas dos pedidos de hoje já concluídos: {formatCurrency(dashboard.sales)} · Ticket médio: {formatCurrency(dashboard.average)}</Text>
+      </View> : null}
+      <View style={styles.searchBox}>
+        <TextInput style={styles.input} placeholder="Buscar cliente ou número do pedido" value={search} onChangeText={setSearch} />
+        <TextInput style={styles.input} placeholder="Data: AAAA-MM-DD (opcional)" value={date} onChangeText={setDate} maxLength={10} />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}><View style={styles.filters}>
+          {STATUS_FILTERS.map(option => <Pressable key={option.label} onPress={() => setStatus(option.value)} style={[styles.filter, status === option.value && styles.filterSelected]}><Text style={[styles.filterText, status === option.value && styles.filterTextSelected]}>{option.label}</Text></Pressable>)}
+        </View></ScrollView>
+        <Button title="Aplicar filtros" onPress={() => {
+          if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) { setError('Informe a data no formato AAAA-MM-DD.'); setOrders(null); return; }
+          if (status) setActive(status !== 'DELIVERED' && status !== 'CANCELLED');
+          setOrders(null); setApplied({ search: search.trim() || undefined, date: date || undefined, status });
+        }} />
+      </View>
       {filterBar}
       {content}
     </View>
@@ -175,6 +204,9 @@ export default function OwnerOrdersScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  dashboard: { backgroundColor: colors.surface, padding: spacing.md, gap: spacing.xs },
+  searchBox: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, gap: spacing.xs },
+  input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: spacing.sm, color: colors.text },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   filters: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, paddingTop: spacing.md },
   filter: {

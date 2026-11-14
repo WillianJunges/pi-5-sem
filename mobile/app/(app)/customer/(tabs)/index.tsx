@@ -5,6 +5,7 @@ import { Button } from '../../../../src/components/Button';
 import { EmptyState } from '../../../../src/components/EmptyState';
 import { useAuth } from '../../../../src/contexts/AuthContext';
 import { customerMenuService, isOnSale, type Menu, type MenuItem } from '../../../../src/services/customerMenu.service';
+import { businessHoursService, type BusinessDay } from '../../../../src/services/businessHours.service';
 import { colors, spacing } from '../../../../src/theme';
 import { getErrorMessage } from '../../../../src/utils/errors';
 import { formatCurrency, formatLongDate } from '../../../../src/utils/format';
@@ -64,10 +65,12 @@ export default function MenuScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<MenuItem | null>(null);
+  const [todayHours, setTodayHours] = useState<BusinessDay | null>(null);
 
   const load = useCallback(async () => {
     try {
       setMenu(await customerMenuService.getToday());
+      businessHoursService.public().then(hours => setTodayHours(hours.configured ? hours.days.find(day => day.weekday === hours.todayWeekday) ?? null : null)).catch(() => setTodayHours(null));
       setError(null);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -126,6 +129,7 @@ export default function MenuScreen() {
             <Text style={styles.greeting}>Olá, {user?.name.split(' ')[0]}!</Text>
             <Text style={styles.title}>Cardápio de hoje</Text>
             {menu ? <Text style={styles.date}>{formatLongDate(menu.date)}</Text> : null}
+            {todayHours ? <Text style={styles.date}>{todayHours.opensAt ? `Horário habitual de hoje: ${todayHours.opensAt} às ${todayHours.closesAt}` : 'Horário habitual: fechado hoje'}</Text> : null}
           </View>
         }
         ListEmptyComponent={

@@ -26,9 +26,12 @@ export default function OwnerAccountScreen() {
       </View>
 
       <View style={styles.card}>
+        <Pressable onPress={() => router.push('/owner/business-hours')} style={({ pressed }) => [styles.item, pressed && { opacity: 0.6 }]}>
+          <Text style={styles.itemText}>Horário de funcionamento</Text><Text style={styles.chevron}>›</Text>
+        </Pressable>
         <Pressable
           onPress={() => router.push('/owner/couriers')}
-          style={({ pressed }) => [styles.item, pressed && { opacity: 0.6 }]}
+          style={({ pressed }) => [styles.item, styles.divider, pressed && { opacity: 0.6 }]}
         >
           <Text style={styles.itemText}>Motoboys</Text>
           <Text style={styles.chevron}>›</Text>

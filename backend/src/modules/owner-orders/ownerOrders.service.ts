@@ -35,6 +35,11 @@ export class OwnerOrdersService {
     return { orders: rows.slice(0, filter.limit), hasMore: rows.length > filter.limit };
   }
 
+  async dashboard() {
+    if (!this.orders.dashboard) throw new AppError('Painel indisponível', 500);
+    return this.orders.dashboard();
+  }
+
   async get(id: string): Promise<OwnerOrder> {
     const order = await this.orders.findById(id);
     if (!order) throw new AppError('Pedido não encontrado', 404);
@@ -42,7 +47,7 @@ export class OwnerOrdersService {
   }
 
   /** Aplica uma ação; recusa com mensagem clara se o pedido não está no estado certo. */
-  async apply(id: string, action: OwnerAction): Promise<OwnerOrder> {
+  async apply(id: string, action: OwnerAction, reason?: string | null): Promise<OwnerOrder> {
     const order = await this.get(id);
     const { from, to, only } = ACTION_FLOW[action];
     if (only === 'PICKUP' && order.fulfillment !== 'PICKUP') {
@@ -54,7 +59,7 @@ export class OwnerOrdersService {
         409,
       );
     }
-    const changed = await this.orders.updateStatus(id, from, to);
+    const changed = await this.orders.updateStatus(id, from, to, reason);
     if (!changed) {
       // outra tela mudou o pedido entre a leitura e a gravação
       const current = await this.get(id);

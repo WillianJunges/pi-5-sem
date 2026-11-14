@@ -15,6 +15,7 @@ export interface MenusRepository {
   create(data: { name: string; menuDate: string; weekday?: number | null }): Promise<Menu>;
   update(id: string, data: { name: string; menuDate: string; weekday?: number | null }): Promise<void>;
   prepareWeekly?(id: string, date: string): Promise<Menu>;
+  duplicate?(id: string, date: string): Promise<Menu>;
   /** DRAFT → ACTIVE com as consistências e o bloqueio da procedure sp_activate_menu. */
   activate(id: string): Promise<void>;
   close(id: string): Promise<void>;
@@ -165,6 +166,22 @@ export class MySqlMenusRepository implements MenusRepository {
     } finally {
       conn.release();
     }
+    return (await this.findById(copyId))!;
+  }
+
+  async duplicate(id: string, date: string): Promise<Menu> {
+    const conn = await db.getConnection();
+    const copyId = randomUUID();
+    try {
+      await conn.beginTransaction();
+      const [rows] = await conn.query<MenuRow[]>('SELECT * FROM menus WHERE id = ? FOR UPDATE', [id]);
+      if (!rows[0]) throw new AppError('Cardápio não encontrado', 404);
+      await conn.query('INSERT INTO menus (id, name, menu_date) VALUES (?, ?, ?)', [copyId, `Cópia de ${rows[0].name}`.slice(0, 120), date]);
+      const [items] = await conn.query<ItemRow[]>('SELECT * FROM menu_items WHERE menu_id = ?', [id]);
+      for (const item of items) await conn.query('INSERT INTO menu_items (id, menu_id, variant_id, special_price) VALUES (?, ?, ?, ?)', [randomUUID(), copyId, item.variant_id, item.special_price]);
+      await conn.commit();
+    } catch (err) { await conn.rollback(); throw err; }
+    finally { conn.release(); }
     return (await this.findById(copyId))!;
   }
 

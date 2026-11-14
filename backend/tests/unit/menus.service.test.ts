@@ -60,6 +60,16 @@ describe('Cardápios', () => {
   }
 
   describe('montagem', () => {
+    it('duplica itens e preços em rascunho independente, sem publicar', async () => {
+      const source = await draftWithItems();
+      await menus.activate(source.id);
+      const copy = await menus.duplicate(source.id);
+      expect(copy).toMatchObject({ name: 'Cópia de Cardápio de quinta', status: 'DRAFT', menuDate: TODAY });
+      expect(copy.items).toHaveLength(3);
+      expect(copy.items[0]).toMatchObject({ variantId: media().id, specialPriceCents: 1990 });
+      await menus.removeItem(copy.id, copy.items[0].id);
+      expect((await menus.get(source.id)).items).toHaveLength(3);
+    });
     it('copia o modelo do dia sem abrir a marmitaria e preserva o modelo', async () => {
       const template = await menus.create({ name: 'Quinta', menuDate: TODAY, weekday: 4 });
       await menus.addItem(template.id, media().id, 1990);

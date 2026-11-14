@@ -12,6 +12,7 @@ import { usersRoutes } from './modules/users/users.routes';
 import { authenticate } from './shared/middlewares/authenticate';
 import { authorize } from './shared/middlewares/authorize';
 import { notificationsRoutes } from './modules/notifications/notifications.routes';
+import { businessHoursRoutes } from './modules/owner/businessHours';
 
 export const routes = Router();
 
@@ -27,6 +28,7 @@ routes.use('/notifications', notificationsRoutes);
 routes.use('/users', usersRoutes);
 routes.use('/geo', geoRoutes);
 routes.use('/menus', menusRoutes); // público: cardápio do dia
+routes.use('/business-hours', businessHoursRoutes);
 
 // Cliente
 routes.use('/addresses', authenticate, authorize('CUSTOMER'), addressesRoutes);
