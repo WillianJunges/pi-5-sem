@@ -110,6 +110,7 @@ export class SqliteCourierStorage implements CourierLocalStorage {
       notes: delivery.notes, paymentMethod: delivery.paymentMethod, total: delivery.total, changeFor: delivery.changeFor,
       createdAt: delivery.createdAt, assignedAt: delivery.assignedAt, startedAt: delivery.startedAt,
       completedAt: delivery.completedAt, completionReceivedAt: delivery.completionReceivedAt, cancelledAt: delivery.cancelledAt,
+      courierEarnings: delivery.courierEarnings,
     };
     await tx.runAsync('INSERT INTO courier_cache (user_id, delivery_id, data) VALUES (?, ?, ?) ON CONFLICT(user_id, delivery_id) DO UPDATE SET data = excluded.data', userId, delivery.id, JSON.stringify(serverData));
   }

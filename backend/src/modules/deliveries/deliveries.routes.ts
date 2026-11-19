@@ -8,6 +8,7 @@ export const deliveriesRoutes = Router();
 deliveriesRoutes.use(authenticate);
 // Rotas fixas vêm antes de /:id para não interpretar "me" como UUID.
 deliveriesRoutes.get('/me', authorize('COURIER'), deliveriesController.list);
+deliveriesRoutes.get('/me/summary', authorize('COURIER'), deliveriesController.summary);
 deliveriesRoutes.get('/order/:id', deliveriesController.forOrder);
 deliveriesRoutes.get('/:id', deliveriesController.get);
 deliveriesRoutes.get('/:id/location', trackingController.get);

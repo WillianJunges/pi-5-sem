@@ -2,7 +2,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Crypto from 'expo-crypto';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { Button } from '../../../../src/components/Button';
 import { EmptyState } from '../../../../src/components/EmptyState';
 import { useAuth } from '../../../../src/contexts/AuthContext';
@@ -49,6 +49,16 @@ function Details({ id }: { id: string }) {
     finally { setCopying(false); }
   }
 
+  async function openNavigation(app: 'maps' | 'waze') {
+    const { latitude, longitude } = delivery!.address;
+    const coordinates = `${latitude},${longitude}`;
+    const url = app === 'maps'
+      ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(coordinates)}&travelmode=driving`
+      : `https://waze.com/ul?ll=${encodeURIComponent(coordinates)}&navigate=yes`;
+    try { await Linking.openURL(url); }
+    catch { Alert.alert('Não foi possível abrir a navegação', 'Confira se o aplicativo ou navegador está disponível. Você também pode copiar o endereço.'); }
+  }
+
   function confirmStart() {
     Alert.alert('Iniciar entrega?', 'Confirme ao sair da marmitaria com o pedido.', [
       { text: 'Voltar', style: 'cancel' },
@@ -90,6 +100,8 @@ function Details({ id }: { id: string }) {
       {delivery.address.label ? <Text style={styles.muted}>{delivery.address.label}</Text> : null}
       <Text selectable style={styles.text}>{address}</Text>
       <Button title="Copiar endereço" variant="outline" loading={copying} onPress={() => void copyAddress()} />
+      <Button title="Abrir no Google Maps" variant="outline" onPress={() => void openNavigation('maps')} />
+      <Button title="Abrir no Waze" variant="outline" onPress={() => void openNavigation('waze')} />
     </View>
     {delivery.notes ? <View style={styles.card}>
       <Text style={styles.title}>Observações do cliente</Text>

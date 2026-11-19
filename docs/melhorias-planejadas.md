@@ -29,8 +29,11 @@ foram agrupadas em uma entrega; as demais continuam por perfil.
 
 ## Motoboy
 
-- **Histórico e resumo do dia:** quantidade de entregas e total das taxas.
-- **Navegação:** abrir o endereço no Google Maps ou Waze.
+- **Histórico e resumo do dia (implementado):** quantidade de entregas concluídas
+  e ganhos registrados. O ganho é a taxa da entrega; quando for grátis, usa um
+  valor fixo configurável pela proprietária, inicialmente R$ 7,00. O valor é
+  registrado ao atribuir a entrega; ganhos antigos desconhecidos são indicados.
+- **Navegação (implementado):** abrir o destino no Google Maps ou Waze.
 
 ## Geral
 

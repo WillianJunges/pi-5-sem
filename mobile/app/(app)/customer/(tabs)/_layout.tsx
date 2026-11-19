@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router/js-tabs';
-import { Text } from 'react-native';
+import { Platform, Text } from 'react-native';
 import { useCart } from '../../../../src/contexts/CartContext';
 import { colors } from '../../../../src/theme';
 
@@ -12,6 +12,7 @@ export default function CustomerTabsLayout() {
   const { count } = useCart();
   return (
     <Tabs
+      safeAreaInsets={Platform.OS === 'android' ? { bottom: 0 } : undefined}
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
