@@ -37,6 +37,7 @@ export interface Delivery {
   notes: string | null;
   paymentMethod: PaymentMethod;
   totalCents: number;
+  courierEarningsCents?: number | null;
   changeForCents: number | null;
   createdAt: Date;
   assignedAt: Date | null;

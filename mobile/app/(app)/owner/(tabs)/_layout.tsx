@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router/js-tabs';
-import { Text } from 'react-native';
+import { Platform, Text } from 'react-native';
 import { colors } from '../../../../src/theme';
 
 function TabIcon({ icon, focused }: { icon: string; focused: boolean }) {
@@ -10,6 +10,7 @@ function TabIcon({ icon, focused }: { icon: string; focused: boolean }) {
 export default function OwnerTabsLayout() {
   return (
     <Tabs
+      safeAreaInsets={Platform.OS === 'android' ? { bottom: 0 } : undefined}
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,

@@ -18,6 +18,39 @@ import { type FeeQuote, type FeeRange, formatKm, ownerService, parseDecimal } fr
 import { colors, spacing } from '../../../src/theme';
 import { getErrorMessage } from '../../../src/utils/errors';
 import { formatCurrency } from '../../../src/utils/format';
+import { api } from '../../../src/services/api';
+
+function CourierFeeBox() {
+  const [fee, setFee] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    api<{ fee: number }>('/owner/courier-fee').then(data => {
+      if (active) setFee(data.fee.toFixed(2).replace('.', ','));
+    }).catch(err => { if (active) setMessage(getErrorMessage(err)); });
+    return () => { active = false; };
+  }, []));
+  async function save() {
+    const value = parseDecimal(fee);
+    if (!fee.trim() || !Number.isFinite(value) || value < 0) { setMessage('Informe um valor válido.'); return; }
+    setLoading(true);
+    setMessage('');
+    try {
+      const result = await api<{ fee: number }>('/owner/courier-fee', { method: 'PUT', body: { fee: value } });
+      setFee(result.fee.toFixed(2).replace('.', ','));
+      setMessage('Valor salvo para novas atribuições.');
+    } catch (err) { setMessage(getErrorMessage(err)); }
+    finally { setLoading(false); }
+  }
+  return <View style={styles.quote}>
+    <Text style={styles.sectionTitle}>Ganho em entrega grátis</Text>
+    <Text style={styles.muted}>Valor pago ao motoboy quando a taxa do cliente for zero. Alterações valem para novas atribuições.</Text>
+    <TextField label="Valor fixo (R$)" value={fee} onChangeText={setFee} keyboardType="decimal-pad" placeholder="7,00" />
+    <Button title="Salvar valor" onPress={save} loading={loading} />
+    {message ? <Text style={styles.muted}>{message}</Text> : null}
+  </View>;
+}
 
 /** Simula a taxa para uma distância (GET /owner/delivery-fees/quote). */
 function QuoteBox() {
@@ -145,6 +178,7 @@ export default function FeesScreen() {
           <Button title="Nova faixa" onPress={() => router.push('/owner/fee-form')} />
         </View>
 
+        <CourierFeeBox />
         <QuoteBox />
       </ScrollView>
     </KeyboardAvoidingView>

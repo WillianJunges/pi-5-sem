@@ -3,6 +3,8 @@ import { db } from '../../config/database';
 import { AppError } from '../../shared/errors/AppError';
 import { translateDatabaseError } from '../../shared/errors/databaseErrors';
 import { decimalToCents } from '../../shared/utils/money';
+import { dayBounds } from '../../shared/utils/dayBounds';
+import { todayISODate } from '../../shared/utils/date';
 import type {
   DeliveriesFilter, Delivery, DeliveryActor, DeliveryAddress, DeliveryCommand, DeliveryStatus, LockedDeliveryState,
 } from './delivery.types';
@@ -11,6 +13,7 @@ export interface DeliveriesRepository {
   findById(id: string): Promise<Delivery | null>;
   findByOrder(orderId: string): Promise<Delivery | null>;
   listByCourier(courierId: string, filter: DeliveriesFilter): Promise<Delivery[]>;
+  summaryToday?(courierId: string): Promise<{ date: string; count: number; earningsCents: number; unknownCount: number }>;
   /** decide retorna false para reenvio idempotente; lançar um erro desfaz a transação. */
   change(id: string, actor: DeliveryActor, command: DeliveryCommand, decide: (state: LockedDeliveryState) => boolean): Promise<Delivery>;
 }
@@ -28,6 +31,7 @@ interface DeliveryRow extends RowDataPacket {
   completion_received_at: Date | null;
   completion_key: string | null;
   cancelled_at: Date | null;
+  courier_earnings: string | null;
 }
 
 interface DeliveryDetailRow extends DeliveryRow {
@@ -45,6 +49,7 @@ interface DeliveryDetailRow extends DeliveryRow {
 interface LockedOrderRow extends RowDataPacket {
   status: Delivery['orderStatus'];
   server_now: Date;
+  delivery_fee: string;
 }
 
 const SELECT_DETAILS = `SELECT d.*, o.customer_id, o.status AS order_status, o.notes,
@@ -64,6 +69,7 @@ function map(row: DeliveryDetailRow): Delivery {
     address: { ...address, latitude: Number(address.latitude), longitude: Number(address.longitude) },
     notes: row.notes, paymentMethod: row.payment_method,
     totalCents: decimalToCents(row.total),
+    courierEarningsCents: row.courier_earnings === null ? null : decimalToCents(row.courier_earnings),
     changeForCents: row.change_for === null ? null : decimalToCents(row.change_for),
     createdAt: row.created_at, assignedAt: row.assigned_at, startedAt: row.started_at,
     completedAt: row.completed_at, completionReceivedAt: row.completion_received_at, cancelledAt: row.cancelled_at,
@@ -91,7 +97,7 @@ async function changeDelivery(
     const [ids] = await conn.query<RowDataPacket[]>('SELECT order_id FROM deliveries WHERE id = ?', [id]);
     if (!ids[0]) throw new AppError('Entrega não encontrada', 404);
     const [orders] = await conn.query<LockedOrderRow[]>(
-      'SELECT status, UTC_TIMESTAMP(3) AS server_now FROM orders WHERE id = ? FOR UPDATE', [ids[0].order_id],
+      'SELECT status, delivery_fee, UTC_TIMESTAMP(3) AS server_now FROM orders WHERE id = ? FOR UPDATE', [ids[0].order_id],
     );
     const [deliveries] = await conn.query<DeliveryRow[]>('SELECT * FROM deliveries WHERE id = ? FOR UPDATE', [id]);
     if (!orders[0] || !deliveries[0]) throw new AppError('Entrega não encontrada', 404);
@@ -126,6 +132,17 @@ export class MySqlDeliveriesRepository implements DeliveriesRepository {
     return rows.map(map);
   }
 
+  async summaryToday(courierId: string) {
+    const date = todayISODate();
+    const { from, until } = dayBounds(date);
+    const [rows] = await db.query<RowDataPacket[]>(`SELECT COUNT(*) AS count,
+      COALESCE(SUM(courier_earnings), 0) AS earnings,
+      SUM(CASE WHEN courier_earnings IS NULL THEN 1 ELSE 0 END) AS unknown_count
+      FROM deliveries WHERE courier_id = ? AND status = 'COMPLETED'
+      AND completed_at >= ? AND completed_at < ?`, [courierId, from, until]);
+    return { date, count: Number(rows[0].count), earningsCents: decimalToCents(rows[0].earnings), unknownCount: Number(rows[0].unknown_count ?? 0) };
+  }
+
   change(id: string, actor: DeliveryActor, command: DeliveryCommand, decide: (state: LockedDeliveryState) => boolean): Promise<Delivery> {
     return changeDelivery(id, actor, async (conn, row, order) => {
       let candidateCourierEligible = false;
@@ -142,7 +159,12 @@ export class MySqlDeliveriesRepository implements DeliveriesRepository {
       });
       if (!apply) return;
       if (command.type === 'assign') {
-        await conn.query("UPDATE deliveries SET courier_id = ?, status = 'ASSIGNED', assigned_at = UTC_TIMESTAMP(3) WHERE id = ?", [command.courierId, id]);
+        let earnings = row.courier_earnings ?? order.delivery_fee;
+        if (row.courier_earnings === null && decimalToCents(order.delivery_fee) === 0) {
+          const [preferences] = await conn.query<RowDataPacket[]>('SELECT free_delivery_courier_fee FROM store_preferences WHERE id = 1 FOR SHARE');
+          earnings = preferences[0].free_delivery_courier_fee;
+        }
+        await conn.query("UPDATE deliveries SET courier_id = ?, status = 'ASSIGNED', assigned_at = UTC_TIMESTAMP(3), courier_earnings = ? WHERE id = ?", [command.courierId, earnings, id]);
       } else if (command.type === 'start') {
         // Se qualquer UPDATE falhar, o rollback mantém os dois estados anteriores.
         await conn.query("UPDATE orders SET status = 'OUT_FOR_DELIVERY' WHERE id = ?", [row.order_id]);

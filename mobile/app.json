@@ -30,6 +30,7 @@
       "expo-secure-store",
       "expo-sqlite",
       "expo-notifications",
+      ["expo-navigation-bar", { "enforceContrast": false, "style": "dark" }],
       [
         "expo-location",
         {

@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../../components/Button';
 import { EmptyState } from '../../components/EmptyState';
@@ -12,6 +12,37 @@ import { formatCurrency } from '../../utils/format';
 import { CourierErrorNotice, courierStyles as styles, DeliveryBadge } from './components';
 import { DeliveriesListModel } from './models';
 import { useCourierRefresh } from './useCourierRefresh';
+import { api } from '../../services/api';
+import { getErrorMessage } from '../../utils/errors';
+
+type DaySummary = { date: string; count: number; earnings: number; unknownCount: number };
+
+function TodaySummary({ userId, refreshKey }: { userId: string; refreshKey: number }) {
+  const [summary, setSummary] = useState<DaySummary | null>(null);
+  const [error, setError] = useState('');
+  const [retry, setRetry] = useState(0);
+  useFocusEffect(useCallback(() => {
+    let current = true;
+    setSummary(null);
+    setError('');
+    api<DaySummary>('/deliveries/me/summary', { expectedUserId: userId })
+      .then(value => { if (current) setSummary(value); })
+      .catch(err => { if (current) setError(getErrorMessage(err)); });
+    return () => { current = false; };
+  }, [userId, refreshKey, retry]));
+  return <View style={styles.card}>
+    <Text style={styles.title}>Resumo de hoje</Text>
+    {summary ? <>
+      <Text style={styles.text}>{summary.count} {summary.count === 1 ? 'entrega concluída' : 'entregas concluídas'}</Text>
+      <Text style={styles.text}>Ganhos registrados: {formatCurrency(summary.earnings)}</Text>
+      {summary.unknownCount > 0 ? <Text style={styles.muted}>{summary.unknownCount} entrega(s) antiga(s) sem ganho registrado não entram no valor.</Text> : null}
+      <Text style={styles.muted}>Somente entregas confirmadas no servidor. Conclusões pendentes entram após a sincronização.</Text>
+    </> : error ? <>
+      <Text style={styles.muted}>Resumo indisponível: {error}</Text>
+      <Button title="Tentar novamente" variant="outline" onPress={() => setRetry(value => value + 1)} />
+    </> : <ActivityIndicator color={colors.primary} />}
+  </View>;
+}
 
 function DeliveryCard({ delivery }: { delivery: Delivery }) {
   return <Pressable
@@ -25,7 +56,11 @@ function DeliveryCard({ delivery }: { delivery: Delivery }) {
     <Text style={styles.text}>{delivery.address.street}, {delivery.address.number}</Text>
     <Text style={styles.muted}>{delivery.address.district} · {delivery.address.city}/{delivery.address.state}</Text>
     <Text style={styles.muted}>Pedido: {orderStatusLabel(delivery.orderStatus)}</Text>
-    <Text style={styles.text}>{formatCurrency(delivery.total)}</Text>
+    <Text style={styles.text}>Total do pedido: {formatCurrency(delivery.total)}</Text>
+    {delivery.status === 'COMPLETED' ? <Text style={styles.muted}>
+      {delivery.courierEarnings === undefined ? 'Ganho indisponível no cache' : delivery.courierEarnings === null ? 'Ganho não registrado' : `Ganho: ${formatCurrency(delivery.courierEarnings)}`}
+      {delivery.localCompletion ? ' · aguardando sincronização' : ''}
+    </Text> : null}
     <Text style={styles.muted}>#{delivery.orderId.slice(0, 8).toUpperCase()} · {new Date(delivery.createdAt).toLocaleDateString('pt-BR')}</Text>
     <Text style={styles.link}>Ver entrega ›</Text>
   </Pressable>;
@@ -35,6 +70,8 @@ function List({ active }: { active: boolean }) {
   const service = useCourierOffline();
   const [model] = useState(() => new DeliveriesListModel(service, active));
   const state = useSyncExternalStore(model.subscribe, model.getSnapshot);
+  const { user } = useAuth();
+  const [summaryRefresh, setSummaryRefresh] = useState(0);
   useEffect(() => service.subscribeLocal(() => void model.refreshLocal()), [service, model]);
   useCourierRefresh(() => model.reload(), () => model.cancelReads(), active);
 
@@ -50,8 +87,9 @@ function List({ active }: { active: boolean }) {
     keyExtractor={delivery => delivery.id}
     renderItem={({ item }) => <DeliveryCard delivery={item} />}
     contentContainerStyle={[styles.content, local.list]}
-    refreshControl={<RefreshControl refreshing={state.loading} onRefresh={() => void model.reload()} tintColor={colors.primary} />}
+    refreshControl={<RefreshControl refreshing={state.loading} onRefresh={() => { setSummaryRefresh(value => value + 1); void model.reload(); }} tintColor={colors.primary} />}
     ListHeaderComponent={<View style={local.header}>
+      {!active && user ? <TodaySummary userId={user.id} refreshKey={summaryRefresh} /> : null}
       <Text style={styles.muted}>{active ? 'Entregas atribuídas a você. Puxe para baixo para atualizar.' : 'Entregas concluídas, canceladas e confirmações locais pendentes.'}</Text>
       {state.fromCache ? <Text style={styles.muted}>Exibindo dados salvos neste aparelho.</Text> : null}
       {state.error ? <CourierErrorNotice error={state.error} stale onRetry={() => void model.reload()} disabled={state.loading} /> : null}

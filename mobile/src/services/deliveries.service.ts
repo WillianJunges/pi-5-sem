@@ -29,6 +29,8 @@ export interface Delivery {
   notes: string | null;
   paymentMethod: PaymentMethod;
   total: number;
+  /** Valor da entrega para o motoboy; ausente no cache antigo ou desconhecido. */
+  courierEarnings?: number | null;
   changeFor: number | null;
   createdAt: string;
   assignedAt: string | null;

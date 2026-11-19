@@ -7,6 +7,7 @@ import { menusController } from '../menus/menus.controller';
 import { ownerOrdersController } from '../owner-orders/ownerOrders.controller';
 import { productsController } from '../products/products.controller';
 import { ownerBusinessHoursRoutes } from './businessHours';
+import { ownerCourierFeeRoutes } from './courierFee';
 
 /**
  * Rotas administrativas da Proprietária (Lucas).
@@ -16,6 +17,7 @@ export const ownerRoutes = Router();
 ownerRoutes.use(ownerExtrasRoutes);
 ownerRoutes.use('/deliveries', ownerDeliveriesRoutes);
 ownerRoutes.use('/business-hours', ownerBusinessHoursRoutes);
+ownerRoutes.use('/courier-fee', ownerCourierFeeRoutes);
 
 // Produtos e variações (escopo, seção 7)
 ownerRoutes.get('/products', productsController.list);

@@ -41,6 +41,12 @@ export class DeliveriesService {
     return { deliveries: rows.slice(0, filter.limit), hasMore: rows.length > filter.limit };
   }
 
+  async summaryToday(actor: DeliveryActor) {
+    await this.authorize(actor, 'COURIER');
+    if (!this.repo.summaryToday) throw new AppError('Resumo indisponível', 503);
+    return this.repo.summaryToday(actor.id);
+  }
+
   async assign(actor: DeliveryActor, id: string, courierId: string): Promise<Delivery> {
     await this.authorize(actor, 'OWNER');
     return this.repo.change(id, actor, { type: 'assign', courierId }, current => {
