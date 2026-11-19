@@ -18,7 +18,6 @@ import { businessHoursService } from '../../../../src/services/businessHours.ser
 const SECTIONS: { status: MenuStatus; title: string }[] = [
   { status: 'ACTIVE', title: 'Ativo' },
   { status: 'DRAFT', title: 'Rascunhos' },
-  { status: 'CLOSED', title: 'Encerrados' },
 ];
 const DAYS = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 
@@ -43,7 +42,7 @@ function MenuCard({ menu }: { menu: MenuSummary }) {
   );
 }
 
-/** Aba "Cardápios": rascunhos, o ativo e os encerrados (item 3). */
+/** Aba "Cardápios": rascunhos e o ativo (item 3). */
 export default function MenusScreen() {
   const [menus, setMenus] = useState<MenuSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +103,7 @@ export default function MenusScreen() {
     // mais recentes primeiro
     data: menus.filter((m) => m.status === s.status && m.weekday == null).sort((a, b) => b.menuDate.localeCompare(a.menuDate)),
   })).filter((s) => s.data.length > 0);
-  const templates = menus.filter((m) => m.weekday != null).sort((a, b) => a.weekday! - b.weekday!);
+  const templates = menus.filter((m) => m.weekday != null && m.status !== 'CLOSED').sort((a, b) => a.weekday! - b.weekday!);
   const visibleSections = view === 'weekly' ? [{ title: 'Cardápio semanal', data: templates }] : sections;
   const today = todayWeekday ?? new Date().getDay();
   const todayTemplate = templates.find((m) => m.weekday === today);
