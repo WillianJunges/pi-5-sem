@@ -47,11 +47,13 @@ function ItemRow({
   item,
   editable,
   onSetSpecial,
+  onAvailability,
   onRemove,
 }: {
   item: MenuItemDetail;
   editable: boolean;
   onSetSpecial(price: number | null): Promise<void>;
+  onAvailability(value: 'AVAILABLE' | 'LOW' | 'SOLD_OUT'): void;
   onRemove(): void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -80,6 +82,9 @@ function ItemRow({
         <Text style={styles.warning}>Desativado no catálogo: não aparece para o cliente.</Text>
       ) : null}
 
+      {editable ? <View style={styles.actions}>
+        {(['AVAILABLE', 'LOW', 'SOLD_OUT'] as const).map(value => <Action key={value} label={`${item.availability === value ? '✓ ' : ''}${value === 'AVAILABLE' ? 'Disponível' : value === 'LOW' ? 'Últimos' : 'Esgotado'}`} onPress={() => onAvailability(value)} />)}
+      </View> : null}
       {editable && editing ? (
         <View style={styles.specialRow}>
           <TextInput
@@ -300,6 +305,7 @@ export default function MenuScreen() {
                     key={`${item.itemId}:${item.specialPrice}`}
                     item={item}
                     editable={editable}
+                    onAvailability={(value) => run(() => ownerService.menus.setAvailability(menu.id, item.itemId, value))}
                     onSetSpecial={(price) => run(() => ownerService.menus.setSpecialPrice(menu.id, item.itemId, price))}
                     onRemove={() =>
                       confirm(

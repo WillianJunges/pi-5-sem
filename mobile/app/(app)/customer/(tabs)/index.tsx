@@ -40,11 +40,12 @@ function MenuItemCard({ item, onPress }: { item: MenuItem; onPress(): void }) {
         </View>
       </View>
       {item.description ? <Text style={styles.description}>{item.description}</Text> : null}
+      {item.variations.every(v => v.availability === 'SOLD_OUT') ? <Text style={styles.description}>Esgotado</Text> : item.variations.some(v => v.availability === 'LOW') ? <Text style={styles.description}>Últimos restantes</Text> : null}
       {item.variations.length > 1 ? (
         <View style={styles.chips}>
           {item.variations.map((variation) => (
             <Text key={variation.variantId} style={[styles.chip, isOnSale(variation) && styles.chipSale]}>
-              {variation.name} · {formatCurrency(variation.price)}
+              {variation.name} · {formatCurrency(variation.price)}{variation.availability === 'SOLD_OUT' ? ' · Esgotado' : variation.availability === 'LOW' ? ' · Últimos' : ''}
             </Text>
           ))}
         </View>

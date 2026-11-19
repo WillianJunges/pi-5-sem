@@ -10,6 +10,7 @@ export interface MenuVariation {
   price: number;
   /** Preço padrão: se for maior que `price`, a variação está em promoção. */
   standardPrice: number;
+  availability?: 'AVAILABLE' | 'LOW' | 'SOLD_OUT';
 }
 
 export interface MenuItem {

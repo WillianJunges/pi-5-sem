@@ -40,10 +40,15 @@ export function toPublicMenu(menu: Pick<Menu, 'id' | 'menuDate' | 'status'>, ite
       name: item.variantName,
       price,
       standardPrice: fromCents(item.standardPriceCents),
+      ...(item.availability ? { availability: item.availability } : {}),
     });
     product.price = Math.min(product.price, price);
   }
-  for (const p of products.values()) p.variations.sort((a, b) => a.price - b.price);
+  for (const p of products.values()) {
+    p.variations.sort((a, b) => a.price - b.price);
+    const available = p.variations.filter(v => v.availability !== 'SOLD_OUT');
+    if (available.length) p.price = Math.min(...available.map(v => v.price));
+  }
   return { menuId: menu.id, date: menu.menuDate, status: menu.status, items: [...products.values()] };
 }
 
@@ -91,12 +96,6 @@ export class MenusService {
     const today = this.today();
     const active = await this.menus.findActive();
     if (!active || active.menuDate !== today || !(await this.businessOpen())) return null;
-    try {
-      const snapshot = await this.snapshots.findActiveByDate(today);
-      if (snapshot?.menuId === active.id) return snapshot;
-    } catch (err) {
-      console.warn('[menus] MongoDB indisponível, lendo do MySQL:', (err as Error).message);
-    }
     return toPublicMenu(active, await this.menus.itemDetails(active.id));
   }
 
@@ -107,7 +106,7 @@ export class MenusService {
   async priceForOrder(variantId: string): Promise<number> {
     const active = await this.menus.findActive();
     if (active && active.menuDate === this.today() && await this.businessOpen()) {
-      const item = (await this.menus.itemDetails(active.id)).find((i) => i.variantId === variantId && i.available);
+      const item = (await this.menus.itemDetails(active.id)).find((i) => i.variantId === variantId && i.available && i.availability !== 'SOLD_OUT');
       if (item) return item.effectivePriceCents;
     }
     throw new AppError('Este item não está disponível no cardápio de hoje', 409);

@@ -57,6 +57,7 @@ interface DetailRow extends RowDataPacket {
   special_price: string | null;
   effective_price: string;
   available: number;
+  availability: 'AVAILABLE' | 'LOW' | 'SOLD_OUT';
 }
 
 /** DATE do MySQL → "AAAA-MM-DD" (a conexão usa UTC, então não há troca de dia). */
@@ -110,7 +111,7 @@ export class MySqlMenusRepository implements MenusRepository {
 
   async itemDetails(menuId: string): Promise<MenuItemDetail[]> {
     const [rows] = await db.query<DetailRow[]>(
-      'SELECT * FROM vw_menu_items WHERE menu_id = ? ORDER BY product_category, product_name, standard_price',
+      'SELECT v.*, mi.availability FROM vw_menu_items v JOIN menu_items mi ON mi.id = v.item_id WHERE v.menu_id = ? ORDER BY product_category, product_name, standard_price',
       [menuId],
     );
     return rows.map((r) => ({
@@ -125,6 +126,7 @@ export class MySqlMenusRepository implements MenusRepository {
       specialPriceCents: r.special_price === null ? null : decimalToCents(r.special_price),
       effectivePriceCents: decimalToCents(r.effective_price),
       available: Boolean(r.available),
+      availability: r.availability,
     }));
   }
 

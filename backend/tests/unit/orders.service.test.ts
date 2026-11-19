@@ -121,6 +121,21 @@ describe('Pedidos — cálculo e validação', () => {
   let distance: number;
   let service: OrdersService;
 
+  it('refuses a sold-out item even when it is active in the catalog', async () => {
+    menu!.items[0].availability = 'SOLD_OUT';
+    const input = body({ fulfillment: 'PICKUP', items: [{ variantId: V1, quantity: 1 }] });
+    const quote = await service.quote(CUSTOMER, input);
+    expect(quote.unavailableVariantIds).toEqual([V1]);
+    await expectAppError(service.create(CUSTOMER, input), 409);
+    expect(orders.saved).toHaveLength(0);
+  });
+
+  it('preserves per-item notes in the order', async () => {
+    const input = body({ fulfillment: 'PICKUP', items: [{ variantId: V1, quantity: 1, notes: 'sem cebola' }] });
+    const order = await service.create(CUSTOMER, input);
+    expect(order.items[0].notes).toBe('sem cebola');
+  });
+
   beforeEach(async () => {
     orders = new MemoryOrdersRepository();
     addresses = [address({ id: '6f1c2a10-0000-4000-8000-000000000001' })];

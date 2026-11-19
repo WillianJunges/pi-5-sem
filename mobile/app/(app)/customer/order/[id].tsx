@@ -1,3 +1,4 @@
+import { OrderExtras } from '../../../../src/features/customer/OrderExtras';
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -199,6 +200,15 @@ export default function OrderScreen() {
           </View>
         ) : null}
 
+        {order.fulfillment === 'PICKUP' && order.status === 'READY' ? (
+          <View style={[styles.card, styles.readyCard]} accessibilityRole="alert">
+            <Text style={styles.cardTitle}>Seu pedido está pronto para retirada!</Text>
+            <Text style={styles.text}>Você já pode buscá-lo na marmitaria.</Text>
+            <Text style={styles.muted}>{STORE_PICKUP_ADDRESS.line}</Text>
+          </View>
+        ) : null}
+
+        <OrderExtras order={order} />
         <StatusTimeline order={order} />
         {order.fulfillment === 'DELIVERY' && order.status === 'OUT_FOR_DELIVERY' ? <CustomerTrackingCard key={order.id} orderId={order.id} destination={order.address} /> : null}
 
@@ -207,7 +217,7 @@ export default function OrderScreen() {
           {order.items.map((item) => (
             <Row
               key={item.id}
-              label={`${item.quantity}x ${item.productName} · ${item.variantName}`}
+              label={`${item.quantity}x ${item.productName} · ${item.variantName}${item.notes ? `\nObs.: ${item.notes}` : ''}`}
               value={formatCurrency(item.subtotal)}
             />
           ))}
@@ -327,6 +337,7 @@ const styles = StyleSheet.create({
   centerText: { textAlign: 'center' },
   error: { fontSize: 14, color: colors.danger },
   cancelledCard: { borderLeftWidth: 4, borderLeftColor: colors.danger },
+  readyCard: { borderLeftWidth: 4, borderLeftColor: colors.primary, backgroundColor: '#FFF7ED' },
   step: { flexDirection: 'row', gap: spacing.sm },
   stepMarker: { alignItems: 'center', width: 16 },
   dot: { width: 12, height: 12, borderRadius: 6, marginTop: 3 },

@@ -60,6 +60,7 @@ export interface OrderItem {
   variantId: string;
   productName: string;
   variantName: string;
+  notes?: string | null;
   quantity: number;
   unitPrice: number;
   subtotal: number;
@@ -134,7 +135,7 @@ export interface CreateOrderInput {
   paymentMethod: PaymentMethod;
   changeFor: number | null;
   notes: string | null;
-  items: { variantId: string; quantity: number }[];
+  items: { variantId: string; quantity: number; notes?: string | null }[];
   /** Total que o cliente viu na prévia: se mudou, o backend recusa em vez de cobrar outro valor. */
   expectedTotal: number;
 }
