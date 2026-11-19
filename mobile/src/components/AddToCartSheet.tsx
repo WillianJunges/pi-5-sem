@@ -26,7 +26,7 @@ export function AddToCartSheet({ item, menuDate, onClose }: AddToCartSheetProps)
 
   // a cada item aberto, começa do zero (com uma variação só, ela já vem marcada)
   useEffect(() => {
-    setVariation(item?.variations.length === 1 ? item.variations[0] : null);
+    setVariation(item?.variations.length === 1 && item.variations[0].availability !== 'SOLD_OUT' ? item.variations[0] : null);
     setQuantity(1);
   }, [item]);
 
@@ -79,11 +79,12 @@ export function AddToCartSheet({ item, menuDate, onClose }: AddToCartSheetProps)
             return (
               <Pressable
                 key={option.variantId}
+                disabled={option.availability === 'SOLD_OUT'}
                 onPress={() => setVariation(option)}
                 style={[styles.option, selected && styles.optionSelected]}
               >
                 <View style={[styles.radio, selected && styles.radioSelected]} />
-                <Text style={styles.optionName}>{option.name}</Text>
+                <Text style={styles.optionName}>{option.name}{option.availability === 'SOLD_OUT' ? ' · Esgotado' : option.availability === 'LOW' ? ' · Últimos restantes' : ''}</Text>
                 {isOnSale(option) ? (
                   <Text style={styles.standardPrice}>{formatCurrency(option.standardPrice)}</Text>
                 ) : null}

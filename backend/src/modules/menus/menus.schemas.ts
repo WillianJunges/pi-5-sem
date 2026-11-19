@@ -51,6 +51,7 @@ export function presentMenuDetail(m: MenuDetail) {
       specialPrice: money(i.specialPriceCents),
       price: fromCents(i.effectivePriceCents),
       available: i.available,
+      availability: i.availability ?? 'AVAILABLE',
     })),
   };
 }

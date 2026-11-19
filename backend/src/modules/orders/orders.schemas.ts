@@ -27,6 +27,7 @@ const orderBodySchema = z.object({
     .array(
       z.object({
         variantId: z.uuid('Item inválido'),
+        notes: z.string().trim().max(200).nullish(),
         quantity: z
           .number()
           .int('Quantidade inválida')

@@ -231,7 +231,7 @@ export default function OwnerOrderScreen() {
         {order.items.map((item) => (
           <Row
             key={item.id}
-            label={`${item.quantity}x ${item.productName} · ${item.variantName}`}
+            label={`${item.quantity}x ${item.productName} · ${item.variantName}${item.notes ? `\nObs.: ${item.notes}` : ''}`}
             value={formatCurrency(item.subtotal)}
           />
         ))}

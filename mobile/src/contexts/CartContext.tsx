@@ -41,7 +41,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const value = useMemo<CartContextValue>(() => {
     async function requireAvailable(variantId: string, menuDate: string) {
       const menu = await customerMenuService.getToday();
-      if (!menu || menu.date !== menuDate || !menu.items.some(item => item.variations.some(variation => variation.variantId === variantId))) {
+      if (!menu || menu.date !== menuDate || !menu.items.some(item => item.variations.some(variation => variation.variantId === variantId && variation.availability !== 'SOLD_OUT'))) {
         throw new Error('A marmitaria está fechada ou este item não está disponível agora.');
       }
     }

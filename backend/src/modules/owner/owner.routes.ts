@@ -1,3 +1,4 @@
+import { ownerExtrasRoutes } from '../customer-extras/customerExtras.routes';
 import { Router } from 'express';
 import { ownerDeliveriesRoutes } from '../deliveries/deliveries.routes';
 import { couriersController } from '../couriers/couriers.controller';
@@ -12,6 +13,7 @@ import { ownerBusinessHoursRoutes } from './businessHours';
  * Montadas em routes.ts com `authenticate, authorize('OWNER')`.
  */
 export const ownerRoutes = Router();
+ownerRoutes.use(ownerExtrasRoutes);
 ownerRoutes.use('/deliveries', ownerDeliveriesRoutes);
 ownerRoutes.use('/business-hours', ownerBusinessHoursRoutes);
 

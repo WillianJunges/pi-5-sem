@@ -5,18 +5,14 @@ foram agrupadas em uma entrega; as demais continuam por perfil.
 
 ## Cliente
 
-- **Produto esgotado / promoção / últimos restantes:** definir como a proprietária
-  marca cada situação e como o cliente a visualiza. Item esgotado não pode ser comprado.
-- **Confirmar recebimento:** cliente informa que recebeu o pedido. Definir a relação
-  com a conclusão pelo motoboy e como lidar com divergências.
-- **SAC:** relatar item faltando, pedido errado ou outro problema.
-- **Repetir pedido:** adicionar novamente ao carrinho itens de pedido anterior.
-- **Observações:** a observação geral já existe no checkout; avaliar e implementar
-  a observação por item.
-- **Avaliação:** avaliar pedido e/ou entrega.
-- **Retirada pronta:** destacar para o cliente quando o pedido estiver pronto para buscar.
-- **Resumo antes de confirmar:** melhorar a revisão existente de itens, entrega ou
-  retirada, pagamento e valor total.
+- **Produto esgotado / promoção / últimos restantes:** a proprietária define a situação por variação no cardápio; o preço especial indica promoção. Produto esgotado é bloqueado no pedido.
+- **Confirmar recebimento:** após a entrega, o cliente confirma ou abre uma solicitação de ajuda. A confirmação é separada da conclusão pelo motoboy.
+- **SAC:** cliente relata problema; proprietária consulta e marca a solicitação como resolvida ou reabre.
+- **Repetir pedido:** adiciona os itens disponíveis no cardápio atual, respeitando o limite do carrinho.
+- **Observações:** gerais e por item no checkout, visíveis à proprietária.
+- **Avaliação:** nota e comentário opcionais após a conclusão; proprietária consulta na área de atendimento.
+- **Retirada pronta e previsão:** destaque quando a retirada está pronta; prazo médio configurável para entrega e retirada, registrado no pedido.
+- **Resumo antes de confirmar:** itens, modalidade, endereço, pagamento, valores e previsão no checkout.
 
 ## Administradora / proprietária
 

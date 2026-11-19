@@ -88,6 +88,7 @@ interface OrderItemRow extends RowDataPacket {
   variant_id: string;
   product_name: string;
   variant_name: string;
+  notes: string | null;
   quantity: number;
   unit_price: string;
   subtotal: string;
@@ -100,6 +101,7 @@ function mapItem(row: OrderItemRow): OrderItem {
     variantId: row.variant_id,
     productName: row.product_name,
     variantName: row.variant_name,
+    notes: row.notes,
     quantity: row.quantity,
     unitPriceCents: decimalToCents(row.unit_price),
     subtotalCents: decimalToCents(row.subtotal),
@@ -161,14 +163,21 @@ export class MySqlOrdersRepository implements OrdersRepository {
       if (!menus[0] || menus[0].status !== 'ACTIVE' || date !== todayISODate(checkedAt) || menus[0].menuDate !== date || !isWithinBusinessHours(hours as { weekday: number; opensAt: string | null; closesAt: string | null }[], checkedAt)) {
         throw new AppError('A marmitaria não está recebendo pedidos agora.', 409);
       }
+      // Bloqueia os itens enquanto verifica a disponibilidade, evitando venda após esgotar.
+      const [availableItems] = await conn.query<RowDataPacket[]>(
+        'SELECT variant_id, availability FROM menu_items WHERE menu_id = ? FOR UPDATE', [order.menuId]);
+      for (const item of order.items) {
+        const current = availableItems.find(row => row.variant_id === item.variantId);
+        if (!current || current.availability === 'SOLD_OUT') throw new AppError('Um item do carrinho está esgotado. Revise o pedido.', 409);
+      }
       const a = order.address;
       await conn.query(
         `INSERT INTO orders
            (id, customer_id, menu_id, fulfillment, payment_method, change_for, notes,
             address_id, address_label, address_cep, address_street, address_number, address_complement,
             address_district, address_city, address_state, address_latitude, address_longitude,
-            distance_meters, subtotal, delivery_fee, total)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            distance_meters, subtotal, delivery_fee, total, estimated_minutes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT estimated_minutes FROM store_preferences WHERE id = 1))`,
         [
           id,
           customerId,
@@ -198,8 +207,8 @@ export class MySqlOrdersRepository implements OrdersRepository {
       for (const item of order.items) {
         await conn.query(
           `INSERT INTO order_items
-             (id, order_id, product_id, variant_id, product_name, variant_name, quantity, unit_price, subtotal)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             (id, order_id, product_id, variant_id, product_name, variant_name, quantity, unit_price, subtotal, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             randomUUID(),
             id,
@@ -210,6 +219,7 @@ export class MySqlOrdersRepository implements OrdersRepository {
             item.quantity,
             centsToDecimal(item.unitPriceCents),
             centsToDecimal(item.subtotalCents),
+            item.notes ?? null,
           ],
         );
       }

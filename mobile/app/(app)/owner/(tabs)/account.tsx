@@ -26,6 +26,9 @@ export default function OwnerAccountScreen() {
       </View>
 
       <View style={styles.card}>
+        <Pressable onPress={() => router.push('/owner/customer-care')} style={({ pressed }) => [styles.item, pressed && { opacity: 0.6 }]}>
+          <Text style={styles.itemText}>Prazo, atendimento e avaliações</Text><Text style={styles.chevron}>›</Text>
+        </Pressable>
         <Pressable onPress={() => router.push('/owner/fees')} style={({ pressed }) => [styles.item, pressed && { opacity: 0.6 }]}>
           <Text style={styles.itemText}>Taxas de entrega</Text><Text style={styles.chevron}>›</Text>
         </Pressable>

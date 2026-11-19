@@ -116,7 +116,7 @@ export class OrdersService {
       if (quantity > MAX_ITEM_QUANTITY) {
         throw new AppError(`No máximo ${MAX_ITEM_QUANTITY} unidades por item`, 400);
       }
-      const item = menu.items.find((i) => i.variantId === variantId && i.available);
+      const item = menu.items.find((i) => i.variantId === variantId && i.available && i.availability !== 'SOLD_OUT');
       if (!item) {
         unavailableVariantIds.push(variantId);
         continue;
@@ -229,7 +229,7 @@ export class OrdersService {
       subtotalCents: quote.subtotalCents,
       deliveryFeeCents: quote.deliveryFeeCents,
       totalCents: quote.totalCents,
-      items: quote.items,
+      items: quote.items.map(item => ({ ...item, notes: input.items.find(i => i.variantId === item.variantId)?.notes || null })),
     });
 
     // ------------------------------------------------------------------------------------

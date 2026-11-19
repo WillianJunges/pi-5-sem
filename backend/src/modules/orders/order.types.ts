@@ -43,6 +43,7 @@ export interface OrderItem {
   variantId: string;
   productName: string;
   variantName: string;
+  notes?: string | null;
   quantity: number;
   unitPriceCents: number;
   subtotalCents: number;

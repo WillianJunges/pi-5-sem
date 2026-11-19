@@ -66,6 +66,7 @@ export interface MenuSummary {
 }
 
 export interface MenuItemDetail {
+  availability: 'AVAILABLE' | 'LOW' | 'SOLD_OUT';
   itemId: string;
   productId: string;
   productName: string;
@@ -222,6 +223,8 @@ export const ownerService = {
     close: (id: string) => api<MenuSummary>(`/owner/menus/${id}/close`, { method: 'POST' }),
     addItem: (id: string, variantId: string, specialPrice: number | null) =>
       api<unknown>(`/owner/menus/${id}/items`, { method: 'POST', body: { variantId, specialPrice } }),
+    setAvailability: (id: string, itemId: string, availability: 'AVAILABLE' | 'LOW' | 'SOLD_OUT') =>
+      api<unknown>(`/owner/menus/${id}/items/${itemId}/availability`, { method: 'PATCH', body: { availability } }),
     setSpecialPrice: (id: string, itemId: string, specialPrice: number | null) =>
       api<unknown>(`/owner/menus/${id}/items/${itemId}`, { method: 'PATCH', body: { specialPrice } }),
     removeItem: (id: string, itemId: string) => api<void>(`/owner/menus/${id}/items/${itemId}`, { method: 'DELETE' }),

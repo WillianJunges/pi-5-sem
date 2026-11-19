@@ -1,3 +1,4 @@
+import { estimateRoutes } from './modules/customer-extras/customerExtras.routes';
 import { Router } from 'express';
 import { deliveriesRoutes } from './modules/deliveries/deliveries.routes';
 import { checkDatabaseConnection } from './config/database';
@@ -29,6 +30,7 @@ routes.use('/users', usersRoutes);
 routes.use('/geo', geoRoutes);
 routes.use('/menus', menusRoutes); // público: cardápio do dia
 routes.use('/business-hours', businessHoursRoutes);
+routes.use('/estimate', estimateRoutes);
 
 // Cliente
 routes.use('/addresses', authenticate, authorize('CUSTOMER'), addressesRoutes);

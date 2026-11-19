@@ -36,6 +36,7 @@ export interface MenuItemDetail {
   effectivePriceCents: number;
   /** false se o produto ou a variação foi desativado depois de entrar no cardápio. */
   available: boolean;
+  availability?: 'AVAILABLE' | 'LOW' | 'SOLD_OUT';
 }
 
 export interface MenuDetail extends Omit<Menu, 'items'> {
@@ -70,4 +71,5 @@ export interface PublicMenuVariation {
   price: number;
   /** Preço padrão, para o app mostrar "de R$ 22,00 por R$ 19,90". */
   standardPrice: number;
+  availability?: 'AVAILABLE' | 'LOW' | 'SOLD_OUT';
 }

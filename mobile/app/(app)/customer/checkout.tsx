@@ -1,3 +1,4 @@
+import { api } from '../../../src/services/api';
 import { router, useFocusEffect } from 'expo-router';
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import {
@@ -66,7 +67,9 @@ export default function CheckoutScreen() {
   const [payment, setPayment] = useState<PaymentMethod>('PIX');
   const [needsChange, setNeedsChange] = useState(false);
   const [changeFor, setChangeFor] = useState('');
+  const [estimate, setEstimate] = useState<number | null>(null);
   const [notes, setNotes] = useState('');
+  const [itemNotes, setItemNotes] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -85,6 +88,8 @@ export default function CheckoutScreen() {
         .catch((err) => setError(getErrorMessage(err)));
     }, []),
   );
+
+  useEffect(() => { api<{ estimatedMinutes: number }>('/estimate', { auth: false }).then(value => setEstimate(value.estimatedMinutes)).catch(() => setEstimate(null)); }, []);
 
   const pickup = fulfillment === 'PICKUP';
 
@@ -172,7 +177,7 @@ export default function CheckoutScreen() {
         paymentMethod: payment,
         changeFor: change,
         notes: notes.trim() || null,
-        items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })),
+        items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity, notes: itemNotes[i.variantId]?.trim() || null })),
         expectedTotal: quote.total,
       });
       // troca de tela antes de limpar, para não piscar a tela de "carrinho vazio"
@@ -298,7 +303,14 @@ export default function CheckoutScreen() {
           />
         </Section>
 
+        <Section title="Observações por item">
+          {items.map(item => <TextField key={item.id} label={`${item.name} · ${item.variation} (opcional)`} value={itemNotes[item.variantId] ?? ''} onChangeText={value => setItemNotes(current => ({ ...current, [item.variantId]: value }))} maxLength={200} placeholder="Ex.: sem cebola" />)}
+        </Section>
+
         <Section title="Resumo">
+          {estimate !== null ? <Text style={styles.optionText}>Tempo médio estimado: {estimate} min. Seu pedido pode ficar pronto antes.</Text> : null}
+          <Text style={styles.optionText}>{pickup ? `Retirada: ${STORE_PICKUP_ADDRESS.line}` : `Entrega: ${addresses?.find(a => a.id === addressId) ? addressLine(addresses.find(a => a.id === addressId)!) : 'endereço não selecionado'}`}</Text>
+          <Text style={styles.optionText}>Pagamento: {PAYMENT_LABEL[payment]}{payment === 'CASH' && needsChange ? ` · troco para R$ ${changeFor}` : ''}</Text>
           {unavailable.length > 0 ? (
             <View style={[styles.notice, styles.noticeDanger]}>
               <Text style={styles.noticeTitle}>
