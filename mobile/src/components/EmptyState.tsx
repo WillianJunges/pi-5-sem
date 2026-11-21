@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, spacing } from '../theme';
+import { colors, radius, spacing } from '../theme';
 
 interface EmptyStateProps {
   icon: string;
@@ -14,7 +14,9 @@ interface EmptyStateProps {
 export function EmptyState({ icon, title, message, children }: EmptyStateProps) {
   return (
     <View style={styles.container}>
-      <Text style={styles.icon}>{icon}</Text>
+      <View style={styles.iconCircle}>
+        <Text style={styles.icon}>{icon}</Text>
+      </View>
       <Text style={styles.title}>{title}</Text>
       {message ? <Text style={styles.message}>{message}</Text> : null}
       {children ? <View style={styles.action}>{children}</View> : null}
@@ -31,8 +33,17 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     backgroundColor: colors.background,
   },
-  icon: { fontSize: 48 },
-  title: { fontSize: 20, fontWeight: 'bold', color: colors.text, textAlign: 'center' },
-  message: { color: colors.muted, textAlign: 'center' },
+  iconCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  icon: { fontSize: 44 },
+  title: { fontSize: 20, fontWeight: '800', color: colors.text, textAlign: 'center' },
+  message: { color: colors.muted, textAlign: 'center', lineHeight: 21 },
   action: { alignSelf: 'stretch', marginTop: spacing.md },
 });

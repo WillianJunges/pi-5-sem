@@ -1,5 +1,6 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
-import { colors, spacing } from '../theme';
+import { colors, radius, shadows, spacing } from '../theme';
+import { GradientView } from './GradientView';
 
 interface ButtonProps {
   title: string;
@@ -18,9 +19,10 @@ export function Button({ title, onPress, loading, disabled, variant = 'primary' 
       style={({ pressed }) => [
         styles.base,
         outline ? styles.outline : styles.primary,
-        (pressed || disabled) && { opacity: 0.7 },
+        (pressed || disabled) && { opacity: 0.75 },
       ]}
     >
+      {outline ? null : <GradientView from={colors.brand} to={colors.brandEnd} />}
       {loading ? (
         <ActivityIndicator color={outline ? colors.primary : colors.primaryText} />
       ) : (
@@ -31,8 +33,15 @@ export function Button({ title, onPress, loading, disabled, variant = 'primary' 
 }
 
 const styles = StyleSheet.create({
-  base: { height: 48, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.md },
-  primary: { backgroundColor: colors.primary },
-  outline: { borderWidth: 1, borderColor: colors.primary },
-  text: { color: colors.primaryText, fontSize: 16, fontWeight: '600' },
+  base: {
+    height: 52,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+    overflow: 'hidden',
+  },
+  primary: { backgroundColor: colors.brand, ...shadows.brand },
+  outline: { borderWidth: 1.5, borderColor: colors.primary, backgroundColor: 'transparent' },
+  text: { color: colors.primaryText, fontSize: 16, fontWeight: '700' },
 });

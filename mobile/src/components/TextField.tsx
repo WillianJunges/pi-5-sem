@@ -1,6 +1,6 @@
 import { type Ref, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, type TextInputProps, View } from 'react-native';
-import { colors, spacing } from '../theme';
+import { colors, radius, spacing } from '../theme';
 
 interface TextFieldProps extends TextInputProps {
   label: string;
@@ -8,9 +8,18 @@ interface TextFieldProps extends TextInputProps {
   ref?: Ref<TextInput>;
 }
 
-export function TextField({ label, style, ref, secureTextEntry, ...props }: TextFieldProps) {
+export function TextField({
+  label,
+  style,
+  ref,
+  secureTextEntry,
+  onFocus,
+  onBlur,
+  ...props
+}: TextFieldProps) {
   // Campos de senha ganham um olhinho discreto no canto direito para mostrar/esconder o texto.
   const [visible, setVisible] = useState(false);
+  const [focused, setFocused] = useState(false);
   const isPassword = Boolean(secureTextEntry);
 
   return (
@@ -20,8 +29,21 @@ export function TextField({ label, style, ref, secureTextEntry, ...props }: Text
         <TextInput
           ref={ref}
           placeholderTextColor={colors.muted}
-          style={[styles.input, isPassword && styles.inputWithEye, style]}
+          style={[
+            styles.input,
+            focused && styles.inputFocused,
+            isPassword && styles.inputWithEye,
+            style,
+          ]}
           secureTextEntry={isPassword && !visible}
+          onFocus={(event) => {
+            setFocused(true);
+            onFocus?.(event);
+          }}
+          onBlur={(event) => {
+            setFocused(false);
+            onBlur?.(event);
+          }}
           {...props}
         />
         {isPassword ? (
@@ -46,18 +68,19 @@ export function TextField({ label, style, ref, secureTextEntry, ...props }: Text
 }
 
 const styles = StyleSheet.create({
-  container: { gap: spacing.xs },
-  label: { fontSize: 14, fontWeight: '500', color: colors.text },
+  container: { gap: 6 },
+  label: { fontSize: 13, fontWeight: '600', color: colors.text },
   input: {
-    height: 48,
-    borderWidth: 1,
+    height: 50,
+    borderWidth: 1.5,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: radius.md,
     paddingHorizontal: spacing.md,
     fontSize: 16,
     color: colors.text,
-    backgroundColor: colors.background,
+    backgroundColor: colors.field,
   },
+  inputFocused: { borderColor: colors.brand, backgroundColor: colors.surface },
   inputWithEye: { paddingRight: 44 },
   eyeButton: {
     position: 'absolute',
