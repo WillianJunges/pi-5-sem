@@ -1,16 +1,18 @@
 import { Link, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../../src/components/Button';
+import { GradientView } from '../../src/components/GradientView';
 import { TextField } from '../../src/components/TextField';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { ApiError } from '../../src/services/api';
-import { colors, spacing } from '../../src/theme';
+import { colors, radius, shadows, spacing } from '../../src/theme';
 import { getErrorMessage } from '../../src/utils/errors';
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
+  const insets = useSafeAreaInsets();
   /** Voltando da troca de senha: mostra o aviso e já preenche o e-mail. */
   const params = useLocalSearchParams<{ reset?: string; email?: string }>();
   const [email, setEmail] = useState(params.email ?? '');
@@ -39,13 +41,25 @@ export default function LoginScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-          <View style={styles.header}>
-            <Text style={styles.title}>Marmitaria</Text>
-            <Text style={styles.subtitle}>Entre na sua conta</Text>
+    <KeyboardAvoidingView
+      style={styles.safe}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + spacing.lg }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={[styles.hero, { paddingTop: insets.top + spacing.xl }]}>
+          <GradientView from={colors.brand} to={colors.brandEnd} />
+          <View style={styles.logo}>
+            <Text style={styles.logoEmoji}>🍱</Text>
           </View>
+          <Text style={styles.title}>Marmitaria</Text>
+          <Text style={styles.subtitle}>Comida caseira, feita com carinho</Text>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Entre na sua conta</Text>
 
           <TextField
             label="E-mail"
@@ -86,28 +100,56 @@ export default function LoginScreen() {
           ) : null}
 
           <Button title="Entrar" onPress={handleSubmit} loading={submitting} />
+        </View>
 
-          <Link href="/register" style={styles.link}>
-            Não tem conta? <Text style={styles.linkStrong}>Cadastre-se</Text>
-          </Link>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        <Link href="/register" style={styles.link}>
+          Não tem conta? <Text style={styles.linkStrong}>Cadastre-se</Text>
+        </Link>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  container: { flexGrow: 1, justifyContent: 'center', padding: spacing.lg, gap: spacing.md },
-  header: { alignItems: 'center', marginBottom: spacing.lg, gap: spacing.xs },
-  title: { fontSize: 32, fontWeight: 'bold', color: colors.primary },
-  subtitle: { fontSize: 16, color: colors.muted },
+  container: { flexGrow: 1 },
+  hero: {
+    alignItems: 'center',
+    paddingBottom: spacing.xl + spacing.lg,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+    overflow: 'hidden',
+    gap: spacing.xs,
+  },
+  logo: {
+    width: 76,
+    height: 76,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+    ...shadows.card,
+  },
+  logoEmoji: { fontSize: 38 },
+  title: { fontSize: 34, fontWeight: '800', color: colors.primaryText },
+  subtitle: { fontSize: 15, color: colors.primaryText, opacity: 0.92 },
+  card: {
+    marginHorizontal: spacing.lg,
+    marginTop: -spacing.lg,
+    padding: spacing.lg,
+    gap: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    ...shadows.card,
+  },
+  cardTitle: { fontSize: 20, fontWeight: '800', color: colors.text },
   error: { color: colors.danger },
-  forgot: { alignSelf: 'flex-end', color: colors.primary, fontWeight: '600', textDecorationLine: 'underline' },
-  successBox: { padding: spacing.md, borderRadius: 10, backgroundColor: '#F0FDF4' },
-  lockedBox: { gap: spacing.xs, padding: spacing.md, borderRadius: 10, backgroundColor: '#FFF7ED' },
+  forgot: { alignSelf: 'flex-end', color: colors.primary, fontWeight: '600' },
+  successBox: { padding: spacing.md, borderRadius: radius.sm, backgroundColor: colors.successSoft },
+  lockedBox: { gap: spacing.xs, padding: spacing.md, borderRadius: radius.sm, backgroundColor: colors.primarySoft },
   lockedTitle: { fontSize: 15, fontWeight: 'bold', color: colors.text },
   lockedText: { fontSize: 14, color: colors.text },
-  link: { textAlign: 'center', color: colors.muted, marginTop: spacing.sm },
-  linkStrong: { color: colors.primary, fontWeight: '600' },
+  link: { textAlign: 'center', color: colors.muted, marginTop: spacing.lg },
+  linkStrong: { color: colors.primary, fontWeight: '700' },
 });

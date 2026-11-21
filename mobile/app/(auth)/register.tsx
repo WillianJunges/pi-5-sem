@@ -1,15 +1,21 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../../src/components/Button';
 import { TextField } from '../../src/components/TextField';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { colors, spacing } from '../../src/theme';
+import { colors, radius, shadows, spacing } from '../../src/theme';
 import { getErrorMessage } from '../../src/utils/errors';
 import { isValidPhone, maskPhone } from '../../src/utils/format';
 
 export default function RegisterScreen() {
   const { signUp } = useAuth();
-  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirm: '' });
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    password: '',
+    confirm: '',
+  });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -48,29 +54,31 @@ export default function RegisterScreen() {
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <TextField label="Nome" value={form.name} onChangeText={set('name')} autoComplete="name" />
-        <TextField
-          label="E-mail"
-          value={form.email}
-          onChangeText={set('email')}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoComplete="email"
-        />
-        <TextField
-          label="Telefone (com DDD)"
-          value={form.phone}
-          onChangeText={(text) => set('phone')(maskPhone(text))}
-          placeholder="(19) 99999-8888"
-          keyboardType="phone-pad"
-          autoComplete="tel"
-        />
-        <TextField label="Senha" value={form.password} onChangeText={set('password')} secureTextEntry />
-        <TextField label="Confirmar senha" value={form.confirm} onChangeText={set('confirm')} secureTextEntry />
+        <View style={styles.card}>
+          <TextField label="Nome" value={form.name} onChangeText={set('name')} autoComplete="name" />
+          <TextField
+            label="E-mail"
+            value={form.email}
+            onChangeText={set('email')}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoComplete="email"
+          />
+          <TextField
+            label="Telefone (com DDD)"
+            value={form.phone}
+            onChangeText={(text) => set('phone')(maskPhone(text))}
+            placeholder="(19) 99999-8888"
+            keyboardType="phone-pad"
+            autoComplete="tel"
+          />
+          <TextField label="Senha" value={form.password} onChangeText={set('password')} secureTextEntry />
+          <TextField label="Confirmar senha" value={form.confirm} onChangeText={set('confirm')} secureTextEntry />
 
-        {error && <Text style={styles.error}>{error}</Text>}
+          {error && <Text style={styles.error}>{error}</Text>}
 
-        <Button title="Criar conta" onPress={handleSubmit} loading={submitting} />
+          <Button title="Criar conta" onPress={handleSubmit} loading={submitting} />
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -78,6 +86,13 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.background },
-  container: { padding: spacing.lg, gap: spacing.md },
+  container: { padding: spacing.lg },
+  card: {
+    padding: spacing.lg,
+    gap: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    ...shadows.card,
+  },
   error: { color: colors.danger },
 });

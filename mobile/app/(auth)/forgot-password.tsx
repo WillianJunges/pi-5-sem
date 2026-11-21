@@ -4,7 +4,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } fr
 import { Button } from '../../src/components/Button';
 import { TextField } from '../../src/components/TextField';
 import { authService, type ForgotPasswordResult } from '../../src/services/auth.service';
-import { colors, spacing } from '../../src/theme';
+import { colors, radius, shadows, spacing } from '../../src/theme';
 import { getErrorMessage } from '../../src/utils/errors';
 
 /**
@@ -49,7 +49,10 @@ export default function ForgotPasswordScreen() {
     setSubmitting(true);
     try {
       await authService.resetPassword(email.trim(), code.trim(), password);
-      router.replace({ pathname: '/login', params: { reset: '1', email: email.trim() } });
+      router.replace({
+        pathname: '/login',
+        params: { reset: '1', email: email.trim() },
+      });
     } catch (err) {
       setError(getErrorMessage(err));
       setSubmitting(false);
@@ -65,55 +68,57 @@ export default function ForgotPasswordScreen() {
             : 'Informe o e-mail da sua conta. Vamos gerar um código para você criar uma senha nova.'}
         </Text>
 
-        <TextField
-          label="E-mail"
-          value={email}
-          onChangeText={setEmail}
-          placeholder="seu@email.com"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoComplete="email"
-          editable={!sent}
-        />
+        <View style={styles.card}>
+          <TextField
+            label="E-mail"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="seu@email.com"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoComplete="email"
+            editable={!sent}
+          />
 
-        {!sent ? (
-          <>
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            <Button title="Enviar código" onPress={handleSendCode} loading={submitting} />
-          </>
-        ) : (
-          <>
-            {sent.code ? (
-              <View style={styles.mailBox}>
-                <Text style={styles.mailTitle}>📧 E-mail (simulado)</Text>
-                <Text style={styles.mailText}>Seu código para criar uma senha nova é:</Text>
-                <Text style={styles.code} selectable>
-                  {sent.code}
-                </Text>
-                <Text style={styles.muted}>
-                  Vale por {sent.expiresInMinutes} minutos. {sent.message}
-                </Text>
-              </View>
-            ) : (
-              <Text style={styles.muted}>{sent.message}</Text>
-            )}
+          {!sent ? (
+            <>
+              {error ? <Text style={styles.error}>{error}</Text> : null}
+              <Button title="Enviar código" onPress={handleSendCode} loading={submitting} />
+            </>
+          ) : (
+            <>
+              {sent.code ? (
+                <View style={styles.mailBox}>
+                  <Text style={styles.mailTitle}>📧 E-mail (simulado)</Text>
+                  <Text style={styles.mailText}>Seu código para criar uma senha nova é:</Text>
+                  <Text style={styles.code} selectable>
+                    {sent.code}
+                  </Text>
+                  <Text style={styles.muted}>
+                    Vale por {sent.expiresInMinutes} minutos. {sent.message}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.muted}>{sent.message}</Text>
+              )}
 
-            <TextField
-              label="Código"
-              value={code}
-              onChangeText={setCode}
-              placeholder="000000"
-              keyboardType="number-pad"
-              maxLength={6}
-            />
-            <TextField label="Senha nova" value={password} onChangeText={setPassword} secureTextEntry />
-            <TextField label="Confirmar senha nova" value={confirm} onChangeText={setConfirm} secureTextEntry />
+              <TextField
+                label="Código"
+                value={code}
+                onChangeText={setCode}
+                placeholder="000000"
+                keyboardType="number-pad"
+                maxLength={6}
+              />
+              <TextField label="Senha nova" value={password} onChangeText={setPassword} secureTextEntry />
+              <TextField label="Confirmar senha nova" value={confirm} onChangeText={setConfirm} secureTextEntry />
 
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            <Button title="Trocar senha" onPress={handleReset} loading={submitting} />
-            <Button title="Pedir outro código" variant="outline" onPress={handleSendCode} disabled={submitting} />
-          </>
-        )}
+              {error ? <Text style={styles.error}>{error}</Text> : null}
+              <Button title="Trocar senha" onPress={handleReset} loading={submitting} />
+              <Button title="Pedir outro código" variant="outline" onPress={handleSendCode} disabled={submitting} />
+            </>
+          )}
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -122,11 +127,29 @@ export default function ForgotPasswordScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.background },
   container: { padding: spacing.lg, gap: spacing.md },
-  intro: { fontSize: 15, color: colors.text },
+  card: {
+    padding: spacing.lg,
+    gap: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    ...shadows.card,
+  },
+  intro: { fontSize: 15, lineHeight: 22, color: colors.muted },
   error: { color: colors.danger },
   muted: { fontSize: 13, color: colors.muted, textAlign: 'center' },
-  mailBox: { gap: spacing.xs, padding: spacing.md, borderRadius: 10, backgroundColor: '#FFF7ED', alignItems: 'center' },
+  mailBox: {
+    gap: spacing.xs,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+  },
   mailTitle: { fontSize: 15, fontWeight: 'bold', color: colors.text },
   mailText: { fontSize: 14, color: colors.text },
-  code: { fontSize: 32, fontWeight: 'bold', letterSpacing: 6, color: colors.primary },
+  code: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    letterSpacing: 6,
+    color: colors.primary,
+  },
 });
